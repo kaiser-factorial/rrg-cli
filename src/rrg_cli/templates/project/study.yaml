@@ -1,0 +1,46 @@
+study:
+  title: Starter validation study
+  overview_file: shared/STUDY_OVERVIEW.md
+  dataset:
+    source: data/source.csv
+    main_name: analysis
+    merge_key: id
+    formats: [csv, parquet]
+    codebook: data/analysis.codebook.csv
+    metadata: data/analysis.meta.json
+    orientation: >-
+      Use {MAIN_DATASET} in one of these equivalent formats: {FORMATS}. Variable
+      definitions are in {CODEBOOK} and conversion metadata is in {METADATA}.
+    aux:
+      enabled: false
+      name: ""
+      file: ""
+      note: ""
+  given_solution:
+    enabled: false
+    glossary: ""
+    artifacts: []
+    note: ""
+  additional: []
+  questions:
+    file: shared/QUESTIONS.md
+    count: 3
+    map: questions_map.yaml
+  held_constants:
+    file: shared/VALIDATION_INSTRUCTIONS.md
+    summary: the study's construct and grouping definitions
+    qa_groups: all fixed grouping definitions
+  original:
+    methodology_file: shared/ANALYSIS_PROTOCOL_OG.md
+    results_key: operator/origin
+    model: OriginModel
+    vendor: OriginVendor
+  deliverable:
+    report_name: "{MODEL}_Report.docx"
+    reporting_spec: >-
+      Report the analysis N, descriptive inputs, point estimate, uncertainty,
+      effect size where applicable, and a one-sentence conclusion per question.
+    method_guide:
+      enabled: false
+      name: ""
+      file: ""

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rrg-cli"
+version = "0.1.0"
+description = "Build, blind, and grade staged multi-model research validation packages"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{name = "RRG contributors"}]
+keywords = ["research", "reproducibility", "validation", "blinding"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+dependencies = [
+  "PyYAML>=6.0",
+  "pandas>=1.5",
+  "numpy>=1.23",
+  "pyreadstat>=1.2,<1.3; python_version < '3.10'",
+  "pyreadstat>=1.2; python_version >= '3.10'",
+  "pyarrow>=10",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "build>=1.2"]
+
+[project.scripts]
+rrg = "rrg_cli.cli:main"
+
+[project.urls]
+Repository = "https://github.com/kaiser-factorial/RRG"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rrg_cli"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/rrg_cli", "tests", "README.md", "CHANGELOG.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
