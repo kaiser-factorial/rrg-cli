@@ -36,7 +36,7 @@ dev = ["pytest>=7", "build>=1.2"]
 rrg = "rrg_cli.cli:main"
 
 [project.urls]
-Repository = "https://github.com/kaiser-factorial/RRG"
+Repository = "https://github.com/kaiser-factorial/rrg-cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rrg_cli"]
