@@ -1,8 +1,9 @@
 # Contributing
 
 1. Create a Python 3.9+ virtual environment.
-2. Install `pip install -e '.[dev]'`.
-3. Run `pytest` and `python -m build` before proposing a change.
+2. Run `python -m pip install --upgrade pip`.
+3. Install `pip install -e '.[dev]'`.
+4. Run `pytest` and `python -m build` before proposing a change.
 
 Keep engine behavior study-neutral. Study-specific filenames, construct definitions,
 model rosters, and scientific policies belong in project cartridges, not `src/rrg_cli`.

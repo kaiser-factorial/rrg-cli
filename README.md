@@ -10,10 +10,13 @@ prompts, and scaffolds human grading. It does not run models or grade findings.
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -e /path/to/rrg-cli
 ```
 
-Python 3.9+ is supported. Data conversion dependencies are installed with the
+Python 3.9+ and pip 21.3+ are required for editable installation. Upgrading pip
+first is important on macOS system-Python environments, which may create a virtual
+environment with pip 21.2. Data conversion dependencies are installed with the
 package so `rrg convert` works immediately.
 
 ## Start a project
