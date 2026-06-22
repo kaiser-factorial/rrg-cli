@@ -38,6 +38,22 @@ def test_linter_blocks_unexpected_scorecard(ready_project, tmp_path: Path):
     assert {finding.check for finding in report.hard_fails} >= {"withheld_files", "routing"}
 
 
+def test_result_token_scan_can_ignore_declared_shared_constants(ready_project):
+    (ready_project.root / "operator/origin/SUMMARY.md").write_text(
+        "Held-back result .44 using fixed alpha 0.005."
+    )
+    overview = ready_project.root / "shared/STUDY_OVERVIEW.md"
+    overview.write_text(overview.read_text() + "\nFixed alpha 0.005; suspicious value .44.\n")
+    ready_project.config["blinding"]["result_token_scan"]["ignore_tokens"] = ["0.005"]
+
+    result = build_package(ready_project, "replication", "ReplicationModel")
+    token_flags = [item for item in result["lint"]["flags"] if item["check"] == "result_token_scan"]
+
+    assert len(token_flags) == 1
+    assert any(".44" in item for item in token_flags[0]["items"])
+    assert all("0.005" not in item for item in token_flags[0]["items"])
+
+
 def test_origin_vendor_and_disabled_stage_are_refused(ready_project):
     with pytest.raises(RRGError, match="not in"):
         build_package(ready_project, "replication", "UnknownModel")

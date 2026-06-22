@@ -137,6 +137,11 @@ def lint_package(package: Path, stage: str, project: Project) -> LintReport:
         source_value = scan.get("source") or project.config.get("origin", {}).get("results_key")
         source = project.path(source_value) if source_value else Path("/__missing__")
         tokens = _extract_result_tokens(source)
+        ignored_tokens = {
+            str(token).replace("−", "-").rstrip("%")
+            for token in (scan.get("ignore_tokens", []) or [])
+        }
+        tokens -= ignored_tokens
         exclusions = scan.get("exclude_globs", []) or []
         hits: list[str] = []
         if tokens:

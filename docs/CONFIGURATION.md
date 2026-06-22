@@ -13,7 +13,8 @@
 - `stages.<id>`: enablement, degree of freedom, prompt, send list, output/report names.
 - `blinding.always_withhold`: package-relative deny patterns.
 - `blinding.per_stage_methodology`: required and forbidden filename patterns.
-- `blinding.result_token_scan`: held-back source, action, and excluded package globs.
+- `blinding.result_token_scan`: held-back source, action, excluded package globs, and
+  optional `ignore_tokens` for declared shared constants such as a fixed alpha.
 - `constraints.exclude_vendors`: origin-family or otherwise ineligible validators.
 - `constraints.determinism`: settings copied into provenance.
 - `dispatch`: optional agent start template and model slugs.

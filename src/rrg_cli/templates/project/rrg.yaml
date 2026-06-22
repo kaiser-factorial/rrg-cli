@@ -95,6 +95,7 @@ blinding:
     source: operator/origin
     action: flag
     exclude_globs: ["*.csv", "*.parquet", "*.json"]
+    ignore_tokens: []
 
 constraints:
   exclude_vendors: [OriginVendor]
