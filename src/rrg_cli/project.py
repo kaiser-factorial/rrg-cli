@@ -26,6 +26,17 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     constraints = dict(config.get("constraints", {}) or {})
     constraints.setdefault("exclude_vendors", constraints.get("exclude_as_validator", []))
     config["constraints"] = constraints
+    stages = config.get("stages", {})
+    stage_values = stages if isinstance(stages, list) else stages.values()
+    for stage in stage_values:
+        if not isinstance(stage, dict):
+            continue
+        if str(stage.get("data_plan", "")).upper() == "TBD":
+            stage.setdefault("enabled", False)
+            stage.setdefault(
+                "blocked_reason",
+                "Define the data-variation plan and method policy before enabling.",
+            )
     return config
 
 
@@ -57,6 +68,18 @@ class Project:
             cartridge = cartridge["study"] or {}
         if not isinstance(cartridge, dict):
             raise RRGError("study.yaml must contain a study mapping")
+        dataset = cartridge.setdefault("dataset", {})
+        if isinstance(dataset, dict) and not dataset.get("metadata"):
+            metadata = next(
+                (
+                    value
+                    for value in (cfg.get("files", {}).get("all", []) or [])
+                    if str(value).endswith(".meta.json")
+                ),
+                None,
+            )
+            if metadata:
+                dataset["metadata"] = metadata
         return cls(resolved_root, config_path, study_path, cfg, cartridge)
 
     @property

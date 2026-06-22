@@ -19,13 +19,15 @@ def load_question_map(path: Path) -> list[dict[str, Any]]:
         raise RRGError("questions map must contain a `questions` list")
     normalized = []
     for row in rows:
-        if not isinstance(row, dict) or "new" not in row:
-            raise RRGError("each question map entry needs at least `new`")
+        if not isinstance(row, dict) or not ({"new", "n"} & set(row)):
+            raise RRGError("each question map entry needs `new` (or legacy `n`)")
+        new_number = row.get("new", row.get("n"))
+        original_number = row.get("original", row.get("orig", new_number))
         normalized.append(
             {
-                "new": int(row["new"]),
-                "original": int(row.get("original", row["new"])),
-                "topic": str(row.get("topic", f"Question {row['new']}")),
+                "new": int(new_number),
+                "original": int(original_number),
+                "topic": str(row.get("topic", f"Question {new_number}")),
             }
         )
     return sorted(normalized, key=lambda row: row["new"])

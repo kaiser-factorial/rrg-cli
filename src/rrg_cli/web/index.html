@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="rrg-token" content="__RRG_TOKEN__">
+  <title>RRG validation pipeline</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="mark">RRG</span><div><h1 id="project-name">Validation pipeline</h1><p id="project-root"></p></div></div>
+    <nav aria-label="Workflow">
+      <button data-view="dashboard" class="active">Dashboard</button>
+      <button data-view="setup">Setup</button>
+      <button data-view="convert">Convert</button>
+      <button data-view="build">Build</button>
+      <button data-view="prompts">Prompts</button>
+      <button data-view="runs">Runs</button>
+      <button data-view="compare">Compare</button>
+      <button data-view="scorecards">Scorecards</button>
+    </nav>
+  </header>
+  <main id="app" aria-live="polite"><div class="card loading">Loading project…</div></main>
+  <div id="toast" role="status"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

@@ -25,7 +25,8 @@ never enter packages.
 | `packager` | temporary assembly, lint gate, publication, provenance |
 | `doctor` | dependencies, file references, hashes, routing, prompt preflight |
 | `scorecard` | provisional side-by-side grading skeleton |
-| `gui` | read-only local status surface |
+| `gui_service` | generic setup, conversion, packaging, runs, comparison, notes, scorecards |
+| `gui` | authenticated loopback HTTP boundary and packaged static assets |
 | `cli` | command parsing, structured output, exit codes |
 
 ## Exit codes
@@ -40,3 +41,12 @@ never enter packages.
 The engine can represent a disabled stage but does not invent its scientific policy.
 The starter generalization stage remains disabled until its cartridge defines the
 new-data plan, method policy, measurement-model transport, and success rubric.
+
+## GUI security boundary
+
+The browser frontend is a packaged static asset and calls the Python service with
+structured JSON. The service invokes engine functions directly and never shells out.
+It binds to loopback, uses a per-process session token, rejects cross-origin writes,
+caps request bodies, confines all paths, and excludes the results key/private roots
+from run discovery. Images are returned as bounded data URLs rather than unauthenticated
+file routes.

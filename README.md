@@ -69,6 +69,25 @@ Generalization is included in the schema but disabled in the starter manifest. A
 project must define its data-variation plan and prompt before enabling that stage;
 the CLI does not silently choose a scientific policy.
 
+## GUI
+
+`rrg gui` is the packaged, cartridge-driven interface for the full workflow:
+
+- Dashboard: arbitrary configured stages, rosters, packages, returns, grading, and preflight.
+- Setup: engine stages/roster plus study, data, questions, held constants, optional
+  supplied solutions, extra inputs, and deliverables. Unknown YAML fields survive saves.
+- Convert, Build, and Prompts: direct calls into the same modules as the CLI.
+- Runs and Compare: validator-only file browsing, dynamic question maps, figure
+  matching, and operator notes; the withheld key is never exposed as a run.
+- Scorecards: provisional scaffold generation and operator-side review.
+
+The GUI has no shell execution, binds only to `127.0.0.1`, confines paths to the
+project, and requires an ephemeral session token for every API request. Start it with:
+
+```bash
+rrg gui --port 8765 --open
+```
+
 ## Development
 
 ```bash

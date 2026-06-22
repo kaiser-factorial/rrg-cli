@@ -1,64 +1,155 @@
 from __future__ import annotations
 
 import json
+import secrets
 import threading
 import webbrowser
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from importlib.resources import files
+from urllib.parse import parse_qs, urlparse
 
-from .doctor import inspect_project
+from .errors import RRGError
+from .gui_service import GUIState
 from .project import Project
 
-HTML = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>RRG</title><style>
-:root{color-scheme:dark;--bg:#0f1115;--panel:#181b22;--line:#2a2f3a;--fg:#e6e9ef;--mut:#9aa3b2;--g:#3fb950;--b:#6ea8fe;--p:#a371f7;--bad:#f85149}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui}main{max-width:1050px;margin:auto;padding:24px}h1{font-size:20px}.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin:14px 0}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}th,.mut{color:var(--mut)}.pill{display:inline-block;padding:2px 9px;border-radius:16px;font-weight:650;font-size:12px}.s1{background:#3fb95022;color:var(--g)}.s2{background:#6ea8fe22;color:var(--b)}.s3{background:#a371f733;color:var(--p)}.ok{color:var(--g)}.error{color:var(--bad)}code{color:var(--b)}</style></head>
-<body><main><h1>RRG validation pipeline</h1><div id="app" class="card">Loading…</div></main>
-<script>
-const esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
-fetch('/api/status').then(r=>r.json()).then(d=>{let stages=d.stages.map((s,i)=>`<tr><td><span class="pill s${i+1}">${esc(s.id)}</span></td><td>${s.enabled?'enabled':'disabled'}</td><td>${esc(s.models.join(', ')||'—')}</td><td>${s.packages}</td></tr>`).join('');let checks=d.preflight.checks.filter(x=>x.severity!=='ok').map(x=>`<li class="${x.severity}">${esc(x.name)}: ${esc(x.detail)}</li>`).join('')||'<li class=ok>All checks passed</li>';document.getElementById('app').innerHTML=`<h2>${esc(d.project)}</h2><p class=mut><code>${esc(d.root)}</code></p><table><thead><tr><th>Stage</th><th>Status</th><th>Models</th><th>Packages</th></tr></thead><tbody>${stages}</tbody></table><h3>Preflight</h3><ul>${checks}</ul><p class=mut>The CLI remains authoritative for conversion, packaging, linting, prompts, and scorecards.</p>`}).catch(e=>document.getElementById('app').textContent=e);
-</script></body></html>"""
+MAX_REQUEST_BYTES = 2 * 1024 * 1024
 
 
-def status(project: Project) -> dict[str, Any]:
-    package_root = project.path_setting("packages", "operator/_packages")
-    stages = []
-    for stage_id in project.stage_ids():
-        config = project.stage(stage_id)
-        folder = package_root / stage_id
-        stages.append(
-            {
-                "id": stage_id,
-                "enabled": bool(config.get("enabled", True)),
-                "models": [str(item.get("model")) for item in project.roster(stage_id)],
-                "packages": len([path for path in folder.iterdir() if path.is_dir()]) if folder.is_dir() else 0,
-            }
-        )
-    return {
-        "project": project.name,
-        "root": str(project.root),
-        "stages": stages,
-        "preflight": inspect_project(project, strict=True),
-    }
+def _asset(name: str) -> bytes:
+    return files("rrg_cli").joinpath("web", name).read_bytes()
 
 
-def make_handler(project: Project):
+def status(project: Project) -> dict:
+    """Compatibility helper used by integrations and tests."""
+    return GUIState(project).bootstrap()
+
+
+def make_handler(project: Project, token: str | None = None):
+    state = GUIState(project)
+    session_token = token or secrets.token_urlsafe(24)
+
     class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):  # noqa: N802
-            if self.path == "/":
-                payload, content_type = HTML.encode(), "text/html; charset=utf-8"
-            elif self.path == "/api/status":
-                payload = json.dumps(status(project), ensure_ascii=False).encode()
-                content_type = "application/json"
-            else:
-                self.send_error(404)
-                return
-            self.send_response(200)
+        rrg_token = session_token
+
+        def _send(self, status_code: int, payload: bytes, content_type: str) -> None:
+            self.send_response(status_code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+            )
             self.end_headers()
             self.wfile.write(payload)
+
+        def _json(self, value, status_code: int = 200) -> None:
+            self._send(status_code, json.dumps(value, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+
+        def _authorized(self) -> bool:
+            return secrets.compare_digest(self.headers.get("X-RRG-Token", ""), session_token)
+
+        def _require_api_auth(self) -> bool:
+            if self._authorized():
+                return True
+            self._json({"error": "invalid local GUI session"}, HTTPStatus.FORBIDDEN)
+            return False
+
+        def _query(self) -> tuple[str, dict[str, str]]:
+            parsed = urlparse(self.path)
+            values = {key: items[-1] for key, items in parse_qs(parsed.query).items() if items}
+            return parsed.path, values
+
+        def do_GET(self):  # noqa: N802
+            path, query = self._query()
+            try:
+                if path == "/":
+                    html = _asset("index.html").decode().replace("__RRG_TOKEN__", session_token)
+                    return self._send(200, html.encode(), "text/html; charset=utf-8")
+                if path == "/assets/app.css":
+                    return self._send(200, _asset("app.css"), "text/css; charset=utf-8")
+                if path == "/assets/app.js":
+                    return self._send(200, _asset("app.js"), "text/javascript; charset=utf-8")
+                if not path.startswith("/api/"):
+                    return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+                if not self._require_api_auth():
+                    return
+                if path == "/api/bootstrap":
+                    return self._json(state.bootstrap())
+                if path == "/api/preflight":
+                    from .doctor import inspect_project
+
+                    return self._json(inspect_project(state.project, stage=query.get("stage"), strict=True))
+                if path == "/api/prompt":
+                    return self._json(state.render(query.get("stage", ""), query.get("model", ""), query.get("mode", "discuss")))
+                if path == "/api/runs":
+                    return self._json({"runs": state.runs()})
+                if path == "/api/run":
+                    return self._json(state.run_detail(query.get("run", "")))
+                if path == "/api/file":
+                    return self._json(state.run_file(query.get("run", ""), query.get("file", "")))
+                if path == "/api/compare":
+                    return self._json(state.compare(query.get("run", ""), int(query.get("question", "0"))))
+                if path == "/api/scorecards":
+                    return self._json({"scorecards": state.scorecards()})
+                if path == "/api/scorecard":
+                    return self._json(state.scorecard_content(query.get("path", "")))
+                return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+            except RRGError as exc:
+                return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except (ValueError, KeyError) as exc:
+                return self._json({"error": f"invalid request: {exc}"}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:  # pragma: no cover - last-resort local UI boundary
+                return self._json({"error": f"internal error: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        def do_POST(self):  # noqa: N802
+            path, _query = self._query()
+            if not path.startswith("/api/"):
+                return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+            if not self._require_api_auth():
+                return
+            origin = self.headers.get("Origin")
+            if origin and not (
+                origin.startswith("http://127.0.0.1:") or origin.startswith("http://localhost:")
+            ):
+                return self._json({"error": "cross-origin write refused"}, HTTPStatus.FORBIDDEN)
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length < 0 or length > MAX_REQUEST_BYTES:
+                    return self._json({"error": "request is too large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                if not isinstance(payload, dict):
+                    raise RRGError("request body must be a JSON object")
+                if path == "/api/convert":
+                    result = state.convert(payload)
+                elif path == "/api/package":
+                    result = state.package(payload)
+                elif path == "/api/scorecard":
+                    result = state.make_scorecard(payload)
+                elif path == "/api/note":
+                    result = {
+                        "notes": state.save_note(
+                            str(payload.get("run", "")),
+                            int(payload.get("question", 0)),
+                            str(payload.get("text", "")),
+                        )
+                    }
+                elif path == "/api/setup":
+                    result = state.save_setup(payload)
+                else:
+                    return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+                return self._json(result)
+            except json.JSONDecodeError:
+                return self._json({"error": "request body is not valid JSON"}, HTTPStatus.BAD_REQUEST)
+            except RRGError as exc:
+                return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except (ValueError, KeyError) as exc:
+                return self._json({"error": f"invalid request: {exc}"}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:  # pragma: no cover
+                return self._json({"error": f"internal error: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
         def log_message(self, _format, *_args):
             return

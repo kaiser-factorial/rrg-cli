@@ -45,12 +45,17 @@ def test_legacy_manifest_normalization():
                 "package_out": "operator/_packages",
             },
             "constraints": {"exclude_as_validator": ["OriginVendor"]},
+            "stages": [
+                {"id": "generalization", "data_plan": "TBD", "send": ["all"]}
+            ],
         }
     )
     assert config["version"] == 1
     assert config["project"]["name"] == "legacy"
     assert config["paths"]["packages"] == "operator/_packages"
     assert config["constraints"]["exclude_vendors"] == ["OriginVendor"]
+    assert config["stages"][0]["enabled"] is False
+    assert "data-variation plan" in config["stages"][0]["blocked_reason"]
 
 
 def test_prompts_render_without_cartridge_leaks(ready_project: Project):
