@@ -20,9 +20,20 @@ function checked(id){return !!document.getElementById(id)?.checked}
 function lines(text){return String(text||'').split('\n').map(item=>item.trim()).filter(Boolean)}
 async function busy(button,label,work){const prior=button.textContent;button.disabled=true;button.textContent=label;try{return await work()}finally{button.disabled=false;button.textContent=prior}}
 
-async function refresh(){DATA=await api('/api/bootstrap');document.getElementById('project-name').textContent=DATA.project;document.getElementById('project-root').textContent=DATA.root;render()}
-function render(){({dashboard:renderDashboard,setup:renderSetup,convert:renderConvert,build:renderBuild,prompts:renderPrompts,runs:renderRuns,compare:renderCompare,scorecards:renderScorecards}[VIEW]||renderDashboard)()}
-document.querySelectorAll('nav button').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(item=>item.classList.remove('active'));button.classList.add('active');VIEW=button.dataset.view;render()}));
+function applyData(data){DATA=data;document.getElementById('project-name').textContent=DATA.project;document.getElementById('project-root').textContent=DATA.root}
+async function refresh(){applyData(await api('/api/bootstrap'));render()}
+function render(){({dashboard:renderDashboard,setup:renderSetup,convert:renderConvert,build:renderBuild,prompts:renderPrompts,runs:renderRuns,compare:renderCompare,scorecards:renderScorecards,projects:renderProjects}[VIEW]||renderDashboard)()}
+function activateView(view){VIEW=view;document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===view));render()}
+document.querySelectorAll('nav button').forEach(button=>button.addEventListener('click',()=>activateView(button.dataset.view)));
+
+function renderProjects(){
+  const workspace=DATA.workspace||{enabled:false,projects:[]};
+  if(!workspace.enabled){app.innerHTML=`<div class="card hero"><div><div class="eyebrow">Project isolation</div><h2>Projects</h2><p>This GUI is locked to one project. Restart with <code>rrg gui --workspace /path/to/workspace</code> to enable safe project switching and creation.</p></div></div><div class="card">${banner('ok',`Active project: ${DATA.project}`)}<p><code>${esc(DATA.root)}</code></p></div>`;return}
+  const rows=workspace.projects.map(project=>`<tr><td><b>${esc(project.name)}</b>${project.error?`<div class="mut">${esc(project.error)}</div>`:''}</td><td><code>${esc(project.root)}</code></td><td>${project.active?pill(true,'active'):(project.valid?pill(false,'ready'):pill(false,'invalid'))}</td><td>${project.active?'':`<button class="btn" data-project-root="${esc(project.root)}" ${project.valid?'':'disabled'}>Open</button>`}</td></tr>`).join('');
+  app.innerHTML=`<div class="card hero"><div><div class="eyebrow">Confined workspace</div><h2>Projects</h2><p>Each study keeps separate data, manifests, packages, runs, and withheld results. Switching reloads the full project-scoped interface.</p></div><div class="pill">${esc(workspace.root)}</div></div><div class="card"><h2>Workspace projects</h2><table><thead><tr><th>Project</th><th>Relative root</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div class="card"><h2>New project</h2><p class="mut">Create a new child directory inside this workspace from the standard RRG scaffold.</p><div class="row"><div class="field"><label>Project name</label><input id="new-project-name" type="text" placeholder="MovieRatings demo"></div><div class="field"><label>Workspace-relative directory</label><input id="new-project-path" type="text" placeholder="demo_projects/MovieRatings"></div></div><div class="actions"><button class="btn primary" id="new-project-create">Create project</button></div><div id="new-project-result"></div></div>`;
+  document.querySelectorAll('[data-project-root]').forEach(button=>button.onclick=event=>busy(event.currentTarget,'Opening…',async()=>{applyData(await post('/api/project/select',{root:button.dataset.projectRoot}));selectedRun='';selectedQuestion=1;activateView('dashboard');toast(`Opened ${DATA.project}`)}).catch(error=>toast(error.message,true)));
+  document.getElementById('new-project-create').onclick=event=>busy(event.currentTarget,'Creating…',async()=>{applyData(await post('/api/project/create',{name:value('new-project-name'),path:value('new-project-path')}));selectedRun='';selectedQuestion=1;activateView('setup');toast(`Created ${DATA.project}`)}).catch(error=>{toast(error.message,true);document.getElementById('new-project-result').innerHTML=banner('bad',error.message)});
+}
 
 function renderDashboard(){
   const packages=DATA.stages.reduce((sum,stage)=>sum+stage.packages,0);

@@ -11,7 +11,11 @@ import yaml
 from rrg_cli.gui import make_handler, status
 from rrg_cli.gui_service import GUIState
 from rrg_cli.project import Project
+from rrg_cli.converter import convert_dataset
+from rrg_cli.errors import RRGError
+from rrg_cli.scaffold import init_project
 from rrg_cli.scorecard import build_scorecard, load_question_map
+from rrg_cli.workspace import WorkspaceState, discover_project_roots
 
 
 def test_scorecard_is_provisional_and_versioned(ready_project):
@@ -37,10 +41,13 @@ def test_question_map_accepts_current_and_legacy_keys(tmp_path: Path):
     assert load_question_map(path) == [{"new": 4, "original": 9, "topic": "Legacy"}]
 
 
-def _serve(project, token="test-token"):
+def _serve(project, token="test-token", workspace=None):
     from http.server import ThreadingHTTPServer
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(project, token=token))
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        make_handler(project, token=token, workspace=workspace),
+    )
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
@@ -82,9 +89,67 @@ def test_gui_assets_status_and_authenticated_api(ready_project):
         code, _headers, body = _get(server, "/api/bootstrap")
         data = json.loads(body)
         assert code == 200 and data["preflight"]["ok"]
+        assert data["workspace"]["enabled"] is False
         with pytest.raises(HTTPError) as error:
             urlopen(f"http://127.0.0.1:{server.server_port}/api/bootstrap")
         assert error.value.code == 403
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def _ready_workspace_project(root: Path) -> Project:
+    init_project(root)
+    convert_dataset(root / "data/source.csv", root / "data/analysis")
+    return Project.load(root)
+
+
+def test_workspace_discovers_switches_and_creates_confined_projects(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    first = _ready_workspace_project(workspace / "first")
+    second = _ready_workspace_project(workspace / "demos/second")
+    ignored = first.root / "operator/nested"
+    ignored.mkdir(parents=True)
+    (ignored / ".rrg_root").touch()
+
+    assert discover_project_roots(workspace) == [first.root, second.root]
+    state = WorkspaceState(first, workspace)
+    assert state.bootstrap()["workspace"]["active"] == "first"
+    assert state.select_project("demos/second")["root"] == str(second.root)
+
+    created = state.create_project("demos/third", "Third study")
+    assert created["project"] == "Third study"
+    assert created["workspace"]["active"] == "demos/third"
+    assert (workspace / "demos/third/.rrg_root").is_file()
+    with pytest.raises(RRGError, match="workspace-relative"):
+        state.create_project("../escape", "Escape")
+
+
+def test_workspace_http_api_switches_and_creates_projects(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    first = _ready_workspace_project(workspace / "first")
+    second = _ready_workspace_project(workspace / "second")
+    server = _serve(first, workspace=str(workspace))
+    try:
+        _code, _headers, body = _get(server, "/api/bootstrap")
+        bootstrap = json.loads(body)
+        assert bootstrap["workspace"]["enabled"] is True
+        assert {item["root"] for item in bootstrap["workspace"]["projects"]} == {"first", "second"}
+
+        code, selected = _post(server, "/api/project/select", {"root": "second"})
+        assert code == 200 and selected["root"] == str(second.root)
+
+        code, created = _post(
+            server,
+            "/api/project/create",
+            {"path": "demos/new-project", "name": "New project"},
+        )
+        assert code == 200 and created["project"] == "New project"
+        assert created["workspace"]["active"] == "demos/new-project"
+
+        with pytest.raises(HTTPError) as error:
+            _post(server, "/api/project/select", {"root": "../outside"})
+        assert error.value.code == 400
     finally:
         server.shutdown()
         server.server_close()

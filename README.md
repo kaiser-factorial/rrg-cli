@@ -91,6 +91,16 @@ project, and requires an ephemeral session token for every API request. Start it
 rrg gui --port 8765 --open
 ```
 
+To switch safely among several independent projects and scaffold new ones below a
+common parent, launch workspace mode:
+
+```bash
+rrg gui --workspace /path/to/workspace --open
+```
+
+Each study retains its own `rrg.yaml`, `study.yaml`, data, packages, runs, and
+operator-only results. Workspace mode never merges project configurations or files.
+
 ## Development
 
 ```bash

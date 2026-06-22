@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from .errors import RRGError
 from .gui_service import GUIState
 from .project import Project
+from .workspace import WorkspaceState
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
 
@@ -25,8 +26,8 @@ def status(project: Project) -> dict:
     return GUIState(project).bootstrap()
 
 
-def make_handler(project: Project, token: str | None = None):
-    state = GUIState(project)
+def make_handler(project: Project, token: str | None = None, workspace: str | None = None):
+    state = WorkspaceState(project, workspace=workspace)
     session_token = token or secrets.token_urlsafe(24)
 
     class Handler(BaseHTTPRequestHandler):
@@ -79,10 +80,10 @@ def make_handler(project: Project, token: str | None = None):
                     return
                 if path == "/api/bootstrap":
                     return self._json(state.bootstrap())
+                if path == "/api/workspace":
+                    return self._json(state.workspace_status())
                 if path == "/api/preflight":
-                    from .doctor import inspect_project
-
-                    return self._json(inspect_project(state.project, stage=query.get("stage"), strict=True))
+                    return self._json(state.preflight(stage=query.get("stage")))
                 if path == "/api/prompt":
                     return self._json(state.render(query.get("stage", ""), query.get("model", ""), query.get("mode", "discuss")))
                 if path == "/api/runs":
@@ -139,6 +140,13 @@ def make_handler(project: Project, token: str | None = None):
                     }
                 elif path == "/api/setup":
                     result = state.save_setup(payload)
+                elif path == "/api/project/select":
+                    result = state.select_project(str(payload.get("root", "")))
+                elif path == "/api/project/create":
+                    result = state.create_project(
+                        str(payload.get("path", "")),
+                        str(payload.get("name", "")),
+                    )
                 else:
                     return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
                 return self._json(result)
@@ -157,8 +165,13 @@ def make_handler(project: Project, token: str | None = None):
     return Handler
 
 
-def serve(project: Project, port: int = 8765, open_browser: bool = False) -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(project))
+def serve(
+    project: Project,
+    port: int = 8765,
+    open_browser: bool = False,
+    workspace: str | None = None,
+) -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(project, workspace=workspace))
     url = f"http://127.0.0.1:{port}"
     print(f"RRG GUI: {url}")
     if open_browser:

@@ -49,3 +49,10 @@ Explicit locations are also supported:
 rrg preflight --root /project/root \
   --config RRG/vp_config.yaml --study RRG/study.yaml --stage replication
 ```
+
+## GUI workspace mode
+
+`rrg gui --workspace PATH` discovers valid `.rrg_root` projects below `PATH`, lets
+the operator switch the active project, and can scaffold a new child project. All
+project operations remain confined to the selected root. `rrg gui --root PROJECT`
+retains locked single-project behavior.

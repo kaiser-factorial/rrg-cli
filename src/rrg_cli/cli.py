@@ -17,6 +17,7 @@ from .project import Project
 from .prompts import render_prompt
 from .scaffold import init_project
 from .scorecard import build_scorecard
+from .workspace import initial_workspace_project
 
 
 def _emit(value: Any, as_json: bool) -> None:
@@ -115,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     gui = sub.add_parser("gui", help="launch the local status GUI")
     _add_project_args(gui)
+    gui.add_argument("--workspace", help="enable safe switching among projects below this directory")
     gui.add_argument("--port", type=int, default=8765)
     gui.add_argument("--open", action="store_true")
 
@@ -130,6 +132,11 @@ def run(args: argparse.Namespace) -> int:
         created = init_project(Path(args.path), force=args.force)
         result = {"root": str(Path(args.path).resolve()), "created": [str(path) for path in created]}
         _emit(result if args.json else f"Created RRG project at {result['root']} ({len(created)} files)", args.json)
+        return 0
+    if args.command == "gui" and args.workspace:
+        workspace = Path(args.workspace).expanduser().resolve()
+        project = initial_workspace_project(workspace, requested=args.root)
+        serve(project, args.port, open_browser=args.open, workspace=str(workspace))
         return 0
     project = _project(args)
     if args.command in {"doctor", "preflight"}:
