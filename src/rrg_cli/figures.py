@@ -76,8 +76,26 @@ def _tokens(text: str) -> set[str]:
     return {_stem(word) for word in _WORD.findall((text or "").lower()) if word not in _STOP}
 
 
+# "Figure 4", "Fig. 4", "Appendix A", "Appendix, Figure 4", "see Appendix B" — label = number or single letter.
+# Figure branch is tried first; the Appendix branch only matches a standalone label (so
+# "Appendix, Figure 4" resolves to "4", not the "F" of Figure).
+_LABEL_REF = re.compile(
+    r"(?:(?:Figure|Fig\.?)\s*[,:]?\s*(\d{1,3}|[A-Z])|Appendix\s*[,:]?\s*([A-Z]|\d{1,3}))\b",
+    re.IGNORECASE,
+)
+
+
+def _label_of(match: re.Match[str]) -> str:
+    return (match.group(1) or match.group(2)).upper()
+
+
+def _label_sort_key(label: str) -> tuple[int, Any]:
+    return (0, int(label)) if label.isdigit() else (1, label)
+
+
 def _pdf_caption_figures(report: Path) -> list[dict[str, Any]]:
-    """Each appendix figure with its number, caption, and embedded image, paired per page."""
+    """Each appendix figure with its label (number or letter), the body text around the
+    reference to it, and the embedded image (paired per page)."""
     try:
         import pypdf
     except ImportError:
@@ -87,32 +105,34 @@ def _pdf_caption_figures(report: Path) -> list[dict[str, Any]]:
     except Exception:
         return []
     pages_text: list[str] = []
-    num_to_image: dict[int, Any] = {}
+    label_to_image: dict[str, Any] = {}
     for page in reader.pages:
         try:
             text = page.extract_text() or ""
         except Exception:
             text = ""
         pages_text.append(text)
-        numbers = [int(match.group(1)) for match in re.finditer(r"Figure\s+(\d+)", text)]
+        labels = [_label_of(match) for match in _LABEL_REF.finditer(text)]
         try:
             page_images = list(page.images)
         except Exception:
             page_images = []
         for offset, image in enumerate(page_images):
-            number = numbers[offset] if offset < len(numbers) else (numbers[-1] if numbers else None)
-            if number is not None and number not in num_to_image:
-                num_to_image[number] = image
+            label = labels[offset] if offset < len(labels) else (labels[-1] if labels else None)
+            if label is not None and label not in label_to_image:
+                label_to_image[label] = image
     full = "\n".join(pages_text)
-    captions: dict[int, str] = {}
-    for match in re.finditer(r"Figure\s+(\d+)[)\.:]?\s*([^\n]{0,180})", full):
-        number = int(match.group(1))
-        caption = re.sub(r"\s+", " ", match.group(2)).strip()
-        if caption and (number not in captions or len(caption) > len(captions[number])):
-            captions[number] = caption
+    # Context = a window around each reference (the question being discussed), richest kept.
+    contexts: dict[str, str] = {}
+    for match in _LABEL_REF.finditer(full):
+        label = _label_of(match)
+        line = full[match.end() :].split("\n", 1)[0]  # the rest of the label's own line = its caption
+        window = re.sub(r"\s+", " ", line).strip()[:180]
+        if label not in contexts or len(window) > len(contexts[label]):
+            contexts[label] = window
     return [
-        {"figure_no": number, "caption": captions.get(number, ""), "image": image}
-        for number, image in sorted(num_to_image.items())
+        {"label": label, "caption": contexts.get(label, ""), "image": image}
+        for label, image in sorted(label_to_image.items(), key=lambda kv: _label_sort_key(kv[0]))
     ]
 
 
@@ -124,7 +144,7 @@ def _encode_pdf_image(report: Path, figure: dict[str, Any]) -> dict[str, Any] | 
     name = (getattr(image, "name", "") or "").lower()
     mime = "image/jpeg" if name.endswith((".jpg", ".jpeg")) else "image/png"
     caption = figure["caption"]
-    label = f"{report.name} · figure {figure['figure_no']}" + (f": {caption[:70]}" if caption else "")
+    label = f"{report.name} · figure {figure['label']}" + (f": {caption[:70]}" if caption else "")
     return {
         "name": label,
         "data_url": f"data:{mime};base64,{base64.b64encode(data).decode()}",
@@ -133,7 +153,7 @@ def _encode_pdf_image(report: Path, figure: dict[str, Any]) -> dict[str, Any] | 
 
 
 def _match_pdf_figures(report: Path, query: str, limit: int = 4) -> list[dict[str, Any]]:
-    """Figures whose caption best matches the question text. Returns the top scorers
+    """Figures whose referencing text best matches the question. Returns the top scorers
     (so 1-to-many is fine) and nothing when there is no real overlap."""
     query_tokens = _tokens(query)
     if not query_tokens:
@@ -146,13 +166,12 @@ def _match_pdf_figures(report: Path, query: str, limit: int = 4) -> list[dict[st
     if not scored:
         return []
     top = max(score for score, _ in scored)
-    winners = sorted((figure for score, figure in scored if score == top), key=lambda f: f["figure_no"])
+    winners = sorted((figure for score, figure in scored if score == top), key=lambda f: _label_sort_key(f["label"]))
     # One or two weak (single-token) matches are plausible; more than that is just noise.
     if top < 2 and len(winners) > 2:
         return []
-    chosen = winners[:limit]
     out = []
-    for figure in chosen:
+    for figure in winners[:limit]:
         encoded = _encode_pdf_image(report, figure)
         if encoded:
             out.append(encoded)

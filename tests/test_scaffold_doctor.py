@@ -61,8 +61,10 @@ def test_legacy_manifest_normalization():
 def test_prompts_render_without_cartridge_leaks(ready_project: Project):
     replication = render_prompt(ready_project, "replication", "ReplicationModel")
     robustness = render_prompt(ready_project, "robustness", "RobustnessModel")
-    assert len(replication.turns) == 2
-    assert len(robustness.turns) == 3
+    assert len(replication.turns) == 3  # Orient, Execute, Verify
+    assert len(robustness.turns) == 7  # Orient, Propose, Discuss, Discuss-interactively, Lock, Execute, Verify (discuss mode)
+    nodiscuss = render_prompt(ready_project, "robustness", "RobustnessModel", mode="nodiscuss")
+    assert len(nodiscuss.turns) == 5  # discussion turns drop out, operator-reviewed Lock stays
     assert not unresolved_tokens(replication.text)
     assert "ANALYSIS_PROTOCOL_OG.md" in replication.text
     assert "original protocol" in robustness.reminders.lower()
