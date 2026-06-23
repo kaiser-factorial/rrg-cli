@@ -1,0 +1,3852 @@
+{
+  "source_file": "movieReplicationSet.csv",
+  "source_sha256": "5df8f0b9e98c0600a53673c059db77129640acfb579a2244759cb0e28f0ae47c",
+  "source_format": ".csv",
+  "n_rows": 1097,
+  "n_cols": 477,
+  "mode": "coded",
+  "encoding": "utf-8",
+  "columns": [
+    "The Life of David Gale (2003)",
+    "Wing Commander (1999)",
+    "Django Unchained (2012)",
+    "Alien (1979)",
+    "Indiana Jones and the Last Crusade (1989)",
+    "Snatch (2000)",
+    "Rambo: First Blood Part II (1985)",
+    "Fargo (1996)",
+    "Let the Right One In (2008)",
+    "Black Swan (2010)",
+    "King Kong (1976)",
+    "The Machinist (2004)",
+    "A Nightmare on Elm Street (1984)",
+    "Brazil (1985)",
+    "The Fast and the Furious (2001)",
+    "Change of Habit (1969)",
+    "American Beauty (1999)",
+    "Psycho (1960)",
+    "Terminator 3: Rise of the Machines (2003)",
+    "Night of the Living Dead (1968)",
+    "Man on Fire (2004)",
+    "Star Wars: Episode IV - A New Hope (1977)",
+    "The Silence of the Lambs (1991)",
+    "The Others (2001)",
+    "Minority Report (2002)",
+    "Sling Blade (1996)",
+    "Schindler's List (1993)",
+    "3000 Miles to Graceland (2001)",
+    "Magnolia (1999)",
+    "The Karate Kid Part II (1986)",
+    "Planet of the Apes (2001)",
+    "The Godfather: Part II (1974)",
+    "Indiana Jones and the Temple of Doom (1984)",
+    "Indiana Jones and the Raiders of the Lost Ark (1981)",
+    "The Iron Giant (1999)",
+    "The Matrix Revolutions (2003)",
+    "North (1994)",
+    "The Lost World: Jurassic Park (1997)",
+    "The Texas Chainsaw Massacre (1974)",
+    "Taxi Driver (1976)",
+    "Back to the Future (1985)",
+    "13 Going on 30 (2004)",
+    "Sorority Boys (2002)",
+    "The Bridges of Madison County (1995)",
+    "Billy Madison (1995)",
+    "Chain Reaction (1996)",
+    "Batman & Robin (1997)",
+    "Jurassic Park III (2001)",
+    "Platoon (1986)",
+    "Signs (2002)",
+    "Terms of Endearment (1983)",
+    "Mission: Impossible II (2000)",
+    "Lost in Translation (2003)",
+    "Star Trek: The Motion Picture (1979)",
+    "Inglorious Bastards (2009)",
+    "Clueless (1995)",
+    "The Omen (1976)",
+    "Shrek 2 (2004)",
+    "Good Will Hunting (1997)",
+    "Just Like Heaven (2005)",
+    "Showgirls (1995)",
+    "Diamonds are Forever (1971)",
+    "Crossroads (2002)",
+    "Pieces of April (2003)",
+    "Torque (2004)",
+    "Poltergeist (1982)",
+    "Fear and Loathing in Las Vegas (1998)",
+    "Barbarella (1968)",
+    "The King of Marvin Gardens (1972)",
+    "The Poseidon Adventure (1972)",
+    "The Rock (1996)",
+    "Love Story (1970)",
+    "The Last Samurai (2003)",
+    "The Jungle Book (1967)",
+    "The Exorcist (1973)",
+    "Pirates of the Caribbean: Dead Man's Chest (2006)",
+    "Gone in Sixty Seconds (2000)",
+    "Funny Girl (1968)",
+    "Honey (2003)",
+    "Blues Brothers 2000 (1998)",
+    "Avatar (2009)",
+    "The Pianist (2002)",
+    "Godzilla (1998)",
+    "Fight Club (1999)",
+    "The Conjuring (2013)",
+    "Top Gun (1986)",
+    "Slackers (2002)",
+    "Shrek (2001)",
+    "12 Monkeys (1995)",
+    "From Hell (2001)",
+    "Dead Poets Society (1989)",
+    "Once Upon a Time in America (1984)",
+    "Equilibrium (2002)",
+    "Star Wars: Episode II - Attack of the Clones (2002)",
+    "The Thing (1982)",
+    "Interstellar (2014)",
+    "Full Metal Jacket (1987)",
+    "Big Fish (2003)",
+    "Cool Hand Luke (1967)",
+    "A Beautiful Mind (2001)",
+    "Sholay (1978)",
+    "The 51st State (2001)",
+    "Die Hard With a Vengeance (1995)",
+    "Elf (2003)",
+    "The Blue Lagoon (1980)",
+    "Hellraiser (1987)",
+    "Moonraker (1979)",
+    "Leon (1994)",
+    "Mystic River (2003)",
+    "Sexy Beast (2000)",
+    "Beetle Juice (1988)",
+    "Andaz Apna Apna (1994)",
+    "The Proposal (2009)",
+    "The Shining (1980)",
+    "The Land That Time Forgot (1974)",
+    "The Perfect Storm (2000)",
+    "Escape from LA (1996)",
+    "Shutter Island (2010)",
+    "JFK (1991)",
+    "Barb Wire (1996)",
+    "Oldboy (2003)",
+    "Carrie (1976)",
+    "The Good the Bad and the Ugly (1966)",
+    "Speed 2: Cruise Control (1997)",
+    "The Lord of the Rings: The Fellowship of the Ring (2001)",
+    "The Talented Mr. Ripley (1999)",
+    "Casino (1995)",
+    "A Time to Kill (1996)",
+    "Blazing Saddles (1974)",
+    "The Doom Generation (1995)",
+    "Armageddon (1998)",
+    "X-Men (2000)",
+    "Arachnophobia (1990)",
+    "Stir Crazy (1980)",
+    "Billy Jack (1971)",
+    "The Silencers (1966)",
+    "The Three Musketeers (1993)",
+    "Girl Interrupted (1999)",
+    "Finding Nemo (2003)",
+    "Tropic of Cancer (1970)",
+    "The Sixth Sense (1999)",
+    "I Know What You Did Last Summer (1997)",
+    "Indiana Jones and the Kingdom of the Crystal Skull (2008)",
+    "Divine Secrets of the Ya-Ya Sisterhood (2002)",
+    "Ace Ventura: When Nature Calls (1995)",
+    "Dances with Wolves (1990)",
+    "Date and Switch (2014)",
+    "The Intouchables (2011)",
+    "Mrs. Doubtfire (1993)",
+    "Ghostbusters (2016)",
+    "Almost Famous (2000)",
+    "Blade Runner (1982)",
+    "Unforgiven (1992)",
+    "Rosemary's Baby (1968)",
+    "Cheaper by the Dozen (2003)",
+    "Can't Hardly Wait (1998)",
+    "Die Another Day (2002)",
+    "Toy Story 2 (1999)",
+    "Transformers: Age of Extinction (2014)",
+    "Like Stars on Earth (2007)",
+    "Terminator 2: Judgement Day (1991)",
+    "25th Hour (2002)",
+    "Who's Afraid of Virginia Woolf (1966)",
+    "Adaption (2002)",
+    "Life is Beautiful (1997)",
+    "Room (2015)",
+    "Scream (1996)",
+    "The Evil Dead (1981)",
+    "Gangs of New York (2002)",
+    "Stand By Me (1986)",
+    "The Vow (2012)",
+    "Toy Story 3 (2010)",
+    "The Matrix Reloaded (2003)",
+    "Once Upon a Time in the West (1968)",
+    "Star Wars: Episode V - The Empire Strikes Back (1980)",
+    "War Games (1983)",
+    "Kill Bill: Vol. 2 (2004)",
+    "Saving Private Ryan (1998)",
+    "Just Married (2003)",
+    "Being John Malkovich (1999)",
+    "Father's Day (1997)",
+    "Batman (1989)",
+    "Se7en (1995)",
+    "Happy Gilmore (1996)",
+    "My Big Fat Greek Wedding (2002)",
+    "Boomerang (1992)",
+    "The Avengers (2012)",
+    "In America (2002)",
+    "Tarzan (1999)",
+    "Scent of a Woman (1992)",
+    "The Cabin in the Woods (2012)",
+    "Spider-Man (2002)",
+    "Broken Arrow (1996)",
+    "Baby Geniuses (1999)",
+    "Battlefield Earth (2000)",
+    "The Firm (1993)",
+    "De-Lovely (2004)",
+    "Die Hard (1988)",
+    "The Lord of the Rings: The Two Towers (2002)",
+    "The Blair Witch Project (1999)",
+    "Judge Dredd (1995)",
+    "10 Things I Hate About You (1999)",
+    "The Insider (1999)",
+    "Erik the Viking (1989)",
+    "Pirates of the Caribbean: At World's End (2007)",
+    "The Ring (2002)",
+    "The Truman Show (1998)",
+    "Forrest Gump (1994)",
+    "I.Q. (1994)",
+    "Goodfellas (1990)",
+    "Uptown Girls (2003)",
+    "Beauty and the Beauty (1991)",
+    "Black Hawk Down (2001)",
+    "Knight and Day (2010)",
+    "The Shawshank Redemption (1994)",
+    "Sleepy Hollow (1999)",
+    "The Holiday (2006)",
+    "Sixteen Candles (1984)",
+    "10000 BC (2008)",
+    "Austin Powers: The Spy Who Shagged Me (1999)",
+    "The Lion King (1994)",
+    "Child's Play (1988)",
+    "Anger Management (2002)",
+    "Angels in the Outfield (1994)",
+    "Wild Wild West (1999)",
+    "Split (2016)",
+    "Bad Boys (1995)",
+    "The Prestige (2006)",
+    "American Graffiti (1973)",
+    "Air Force One (1997)",
+    "Harry Potter and the Sorcerer's Stone (2001)",
+    "Close Encounters of the Third Kind (1977)",
+    "Hollow Man (2000)",
+    "Point Break (1991)",
+    "I Robot (2004)",
+    "Batman: The Dark Knight (2008)",
+    "Ghost (1990)",
+    "A Bug's Life (1998)",
+    "American Pie (1999)",
+    "Daredevil (2003)",
+    "The Bandit (1996)",
+    "Grease (1978)",
+    "The Girl Next Door (2004)",
+    "The Godfather (1972)",
+    "Cloverfield (2008)",
+    "Rush Hour 2 (2001)",
+    "Bruce Almighty (2003)",
+    "Girl With a Pearl Earring (2003)",
+    "Grown Ups 2 (2013)",
+    "Best Laid Plans (1999)",
+    "Bram Stoker's Dracula (1992)",
+    "Fahrenheit 9/11 (2004)",
+    "Donnie Darko (2001)",
+    "Bad Teacher (2011)",
+    "Cable Guy (1996)",
+    "Ice Age (2002)",
+    "Misery (1990)",
+    "8 Mile (2002)",
+    "Harry Potter and the Deathly Hallows: Part 2 (2011)",
+    "Ouija: Origin of Evil (2016)",
+    "The Deer Hunter (1978)",
+    "There's Something About Mary (1998)",
+    "Zoolander (2001)",
+    "The Core (2003)",
+    "Spirited Away (2001)",
+    "Rocky (1976)",
+    "Traffic (2000)",
+    "Monsters  Inc.(2001)",
+    "Thoroughly Modern Millie (1967)",
+    "Requiem for a Dream (2000)",
+    "Downfall (2004)",
+    "L.A. Confidential (1997)",
+    "Chicago (2002)",
+    "Star Wars: Episode 1 - The Phantom Menace (1999)",
+    "Rain Man (1988)",
+    "What Lies Beneath (2000)",
+    "Toy Story (1995)",
+    "Boy's Don't Cry (1999)",
+    "Pearl Harbor (2001)",
+    "A.I. Artificial Intelligence (2001)",
+    "The Sting (1973)",
+    "Scream 3 (2000)",
+    "Congo (1995)",
+    "Bowling For Columbine (2002)",
+    "What Women Want (2000)",
+    "Home Alone (1990)",
+    "How the Grinch Stole Christmas (2000)",
+    "The Straight Story (1999)",
+    "The Hulk (2003)",
+    "Gigli (2002)",
+    "Rocky V (1991)",
+    "The Visit (2015)",
+    "Titanic (1997)",
+    "A Clockwork Orange (1971)",
+    "Charlie's Angels (2000)",
+    "Friday the 13th Part III (1982)",
+    "Hannibal (2001)",
+    "Pulp Fiction (1994)",
+    "Crimson Tide (1995)",
+    "Blow (2001)",
+    "Ran (1985)",
+    "Mulholland Dr. (2001)",
+    "Apocalypse Now (1979)",
+    "Cinema Paradiso (1988)",
+    "Double Jeopardy (1999)",
+    "The Big Lebowski (1998)",
+    "The Matrix (1999)",
+    "The Lord of the Rings: The Return of the King (2003)",
+    "Reservoir Dogs (1992)",
+    "Heavy Traffic (1973)",
+    "Memento (2000)",
+    "Dogville (2003)",
+    "American Psycho (2000)",
+    "Kill Bill: Vol. 1 (2003)",
+    "The Fugitive (1993)",
+    "Bend it Like Beckham (2002)",
+    "Austin Powers in Goldmember (2002)",
+    "The Mummy Returns (2001)",
+    "The Nightmare Before Christmas (1993)",
+    "La La Land (2016)",
+    "Flowers in the Attic (1987)",
+    "28 Days Later (2002)",
+    "The Princess Bride (1987)",
+    "The Green Mile (1999)",
+    "Predator (1987)",
+    "A Night at the Roxbury (1998)",
+    "Ed Wood (1994)",
+    "Aliens (1986)",
+    "Meet the Parents (2000)",
+    "Independence Day (1996)",
+    "Who Framed Roger Rabbit (1988)",
+    "As Good as it Gets (1997)",
+    "Butch Cassidy and the Sundance Kid (1969)",
+    "You're Next (2011)",
+    "The Final Conflict (1981)",
+    "City of God (2002)",
+    "Star Wars: Episode VII - The Force Awakens (2015)",
+    "The Transporter (2002)",
+    "Cast Away (2000)",
+    "Bad Boys 2 (2003)",
+    "The Babadook (2014)",
+    "Saw (2004)",
+    "Star Wars: Episode VI - The Return of the Jedi (1983)",
+    "Scary Movie (2000)",
+    "E.T. The Extra-Terrestrial (1982)",
+    "American History X (1998)",
+    "FeardotCom (2002)",
+    "Halloween (1978)",
+    "Along Came a Spider (2002)",
+    "The Mist (2007)",
+    "Aladdin (1992)",
+    "Pirates of the Caribbean: The Curse of the Black Pearl (2003)",
+    "Men in Black (1997)",
+    "Eternal Sunshine of the Spotless Mind (2004)",
+    "Ocean's Eleven (2001)",
+    "Men in Black II (2002)",
+    "Cocktail (1988)",
+    "The Wolf of Wall Street (2013)",
+    "The Game (1997)",
+    "Red Sonja (1985)",
+    "One Flew Over the Cuckoo's Nest (1975)",
+    "Freddy Got Fingered (2001)",
+    "The Village (2004)",
+    "Miller's Crossing (1990)",
+    "My Best Friend's Wedding (1997)",
+    "Iron Man 3 (2013)",
+    "Big Daddy (1999)",
+    "Suspiria (1977)",
+    "The Passenger (1975)",
+    "The Station Agent (2003)",
+    "Jurassic Park (1993)",
+    "Captain America: Civil War (2016)",
+    "A Perfect Murder (1998)",
+    "Analyze That (2002)",
+    "Braveheart (1995)",
+    "Inception (2010)",
+    "Groundhog Day (1993)",
+    "The Lookout (2007)",
+    "21 Grams (2003)",
+    "Gladiator (2000)",
+    "Midnight Cowboy (1969)",
+    "Fatal Attraction (1987)",
+    "House of Sand and Fog (2003)",
+    "On Golden Pond (1981)",
+    "The Mummy (1999)",
+    "The Descent (2005)",
+    "Runaway Bride (1999)",
+    "Harry Potter and the Goblet of Fire (2005)",
+    "Gods and Generals (2003)",
+    "My Father and My Son (2005)",
+    "X-Men 2 (2003)",
+    "The Usual Suspects (1995)",
+    "The Mask (1994)",
+    "Jaws (1975)",
+    "Harry Potter and the Chamber of Secrets (2002)",
+    "Patton (1970)",
+    "Anaconda (1997)",
+    "Twister (1996)",
+    "MacArthur (1977)",
+    "Look Who's Talking (1989)",
+    "I enjoy driving fast",
+    "I enjoy rollercoasters ",
+    "Have you ever bungee-jumped?",
+    "I enjoy impulse shopping",
+    "I sometimes go out on weeknights even if I have work to do",
+    "I enjoy doing things without too much planning ",
+    "Have you ever been rock climbing?",
+    "I enjoy being in large loud crowds like the Times Square Ball Drop on New Years Eve",
+    "I enjoy going to large music or dance festivals ",
+    "I enjoy watching horror movies",
+    "No risk - No fun",
+    "I like to be surprised even if it startles or scares me",
+    "Have you ever parachuted?",
+    "I enjoy haunted houses",
+    "I had a sheltered upbringing",
+    "My life is very stressful",
+    "I value my life to be well ordered and predictable",
+    "Have you ridden a motorcycle?",
+    "Have you gambled or bet for money?",
+    "Have you ever been sky-diving?",
+    "Is talkative",
+    "Tends to find fault with others",
+    "Does a thorough job",
+    "Is depressed/Blue",
+    "Is original/comes up with new ideas",
+    "Is reserved",
+    "Is helpful and unselfish with others",
+    "Can be somewhat careless",
+    "Is relaxed/handles stress well",
+    "Is curious about many different things",
+    "Is full of energy",
+    "Starts quarrels with others",
+    "Is a reliable worker",
+    "Can be tense",
+    "Is ingenious/a deep thinker",
+    "Generates a lot of Enthusiasm",
+    "Has a forgiving nature",
+    "Tends to be disorganized",
+    "Worries a lot",
+    "Has an active imagination",
+    "Tends to be quiet",
+    "Is generally trusting",
+    "Tends to be lazy",
+    "Is emotionally stable/not easily upset",
+    "is inventive",
+    "Has an assertive personality",
+    "Can be cold and aloof",
+    "Perseveres until the task is finished",
+    "Can be moody",
+    "Values artistic/aesthetic experiences",
+    "Is sometimes shy/inhibited",
+    "Is considerate and kind to almost everyone",
+    "Does things efficiently",
+    "Remains calm in tense situations",
+    "Prefers work that is routine",
+    "is outgoing/sociable",
+    "Is sometimes rude to others",
+    "Makes plans and follows through with them",
+    "Gets nervous easily",
+    "Likes to reflect/play with ideas",
+    "Has few artistic interests",
+    "Likes to cooperate with others",
+    "Is easily distracted",
+    "Is sophisticated in art or music or literature",
+    "I have cried during a movie",
+    "I have trouble following the story of a movie",
+    "I have trouble remembering the story of a movie a couple of days after seeing it",
+    "When watching a movie I cheer or shout or talk or curse at the screen",
+    "When watching a movie I feel like the things on the screen are happening to me",
+    "As a movie unfolds I start to have problems keeping track of events that happened earlier",
+    "The emotions on the screen \"rub off\" on me - for instance if something sad is happening I get sad or if something frightening is happening I get scared",
+    "When watching a movie I get completely immersed in the alternative reality of the film",
+    "Movies change my position on social economic or political issues",
+    "When watching movies things get so intense that I have to stop watching",
+    "Gender identity (1 = female; 2 = male; 3 = self-described)",
+    "Are you an only child? (1: Yes; 0: No; -1: Did not respond)",
+    "Movies are best enjoyed alone (1: Yes; 0: No; -1: Did not respond)"
+  ],
+  "variables": {
+    "The Life of David Gale (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Wing Commander (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Django Unchained (2012)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Alien (1979)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Indiana Jones and the Last Crusade (1989)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Snatch (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Rambo: First Blood Part II (1985)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Fargo (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Let the Right One In (2008)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Black Swan (2010)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "King Kong (1976)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Machinist (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "A Nightmare on Elm Street (1984)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Brazil (1985)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Fast and the Furious (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Change of Habit (1969)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "American Beauty (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Psycho (1960)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Terminator 3: Rise of the Machines (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Night of the Living Dead (1968)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Man on Fire (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Star Wars: Episode IV - A New Hope (1977)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Silence of the Lambs (1991)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Others (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Minority Report (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Sling Blade (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Schindler's List (1993)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "3000 Miles to Graceland (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Magnolia (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Karate Kid Part II (1986)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Planet of the Apes (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Godfather: Part II (1974)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Indiana Jones and the Temple of Doom (1984)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Indiana Jones and the Raiders of the Lost Ark (1981)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Iron Giant (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Matrix Revolutions (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "North (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Lost World: Jurassic Park (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Texas Chainsaw Massacre (1974)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Taxi Driver (1976)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Back to the Future (1985)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "13 Going on 30 (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Sorority Boys (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Bridges of Madison County (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Billy Madison (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Chain Reaction (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Batman & Robin (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Jurassic Park III (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Platoon (1986)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Signs (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Terms of Endearment (1983)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Mission: Impossible II (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Lost in Translation (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Star Trek: The Motion Picture (1979)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Inglorious Bastards (2009)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Clueless (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Omen (1976)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Shrek 2 (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Good Will Hunting (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Just Like Heaven (2005)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Showgirls (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Diamonds are Forever (1971)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Crossroads (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Pieces of April (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Torque (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Poltergeist (1982)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Fear and Loathing in Las Vegas (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Barbarella (1968)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The King of Marvin Gardens (1972)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Poseidon Adventure (1972)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Rock (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Love Story (1970)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Last Samurai (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Jungle Book (1967)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Exorcist (1973)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Pirates of the Caribbean: Dead Man's Chest (2006)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Gone in Sixty Seconds (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Funny Girl (1968)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Honey (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Blues Brothers 2000 (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Avatar (2009)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Pianist (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Godzilla (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Fight Club (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Conjuring (2013)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Top Gun (1986)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Slackers (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Shrek (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "12 Monkeys (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "From Hell (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Dead Poets Society (1989)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Once Upon a Time in America (1984)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Equilibrium (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Star Wars: Episode II - Attack of the Clones (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Thing (1982)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Interstellar (2014)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Full Metal Jacket (1987)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Big Fish (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Cool Hand Luke (1967)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "A Beautiful Mind (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Sholay (1978)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The 51st State (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Die Hard With a Vengeance (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Elf (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Blue Lagoon (1980)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Hellraiser (1987)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Moonraker (1979)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Leon (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Mystic River (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Sexy Beast (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Beetle Juice (1988)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Andaz Apna Apna (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Proposal (2009)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Shining (1980)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Land That Time Forgot (1974)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Perfect Storm (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Escape from LA (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Shutter Island (2010)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "JFK (1991)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Barb Wire (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Oldboy (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Carrie (1976)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Good the Bad and the Ugly (1966)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Speed 2: Cruise Control (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Lord of the Rings: The Fellowship of the Ring (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Talented Mr. Ripley (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Casino (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "A Time to Kill (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Blazing Saddles (1974)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Doom Generation (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Armageddon (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "X-Men (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Arachnophobia (1990)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Stir Crazy (1980)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Billy Jack (1971)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Silencers (1966)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Three Musketeers (1993)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Girl Interrupted (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Finding Nemo (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Tropic of Cancer (1970)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Sixth Sense (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I Know What You Did Last Summer (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Indiana Jones and the Kingdom of the Crystal Skull (2008)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Divine Secrets of the Ya-Ya Sisterhood (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Ace Ventura: When Nature Calls (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Dances with Wolves (1990)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Date and Switch (2014)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Intouchables (2011)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Mrs. Doubtfire (1993)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Ghostbusters (2016)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Almost Famous (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Blade Runner (1982)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Unforgiven (1992)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Rosemary's Baby (1968)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Cheaper by the Dozen (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Can't Hardly Wait (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Die Another Day (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Toy Story 2 (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Transformers: Age of Extinction (2014)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Like Stars on Earth (2007)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Terminator 2: Judgement Day (1991)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "25th Hour (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Who's Afraid of Virginia Woolf (1966)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Adaption (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Life is Beautiful (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Room (2015)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Scream (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Evil Dead (1981)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Gangs of New York (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Stand By Me (1986)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Vow (2012)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Toy Story 3 (2010)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Matrix Reloaded (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Once Upon a Time in the West (1968)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Star Wars: Episode V - The Empire Strikes Back (1980)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "War Games (1983)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Kill Bill: Vol. 2 (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Saving Private Ryan (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Just Married (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Being John Malkovich (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Father's Day (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Batman (1989)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Se7en (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Happy Gilmore (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "My Big Fat Greek Wedding (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Boomerang (1992)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Avengers (2012)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "In America (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Tarzan (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Scent of a Woman (1992)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Cabin in the Woods (2012)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Spider-Man (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Broken Arrow (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Baby Geniuses (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Battlefield Earth (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Firm (1993)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "De-Lovely (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Die Hard (1988)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Lord of the Rings: The Two Towers (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Blair Witch Project (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Judge Dredd (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "10 Things I Hate About You (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Insider (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Erik the Viking (1989)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Pirates of the Caribbean: At World's End (2007)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Ring (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Truman Show (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Forrest Gump (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I.Q. (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Goodfellas (1990)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Uptown Girls (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Beauty and the Beauty (1991)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Black Hawk Down (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Knight and Day (2010)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Shawshank Redemption (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Sleepy Hollow (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Holiday (2006)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Sixteen Candles (1984)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "10000 BC (2008)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Austin Powers: The Spy Who Shagged Me (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Lion King (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Child's Play (1988)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Anger Management (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Angels in the Outfield (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Wild Wild West (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Split (2016)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Bad Boys (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Prestige (2006)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "American Graffiti (1973)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Air Force One (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Harry Potter and the Sorcerer's Stone (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Close Encounters of the Third Kind (1977)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Hollow Man (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Point Break (1991)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I Robot (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Batman: The Dark Knight (2008)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Ghost (1990)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "A Bug's Life (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "American Pie (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Daredevil (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Bandit (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Grease (1978)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Girl Next Door (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Godfather (1972)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Cloverfield (2008)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Rush Hour 2 (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Bruce Almighty (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Girl With a Pearl Earring (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Grown Ups 2 (2013)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Best Laid Plans (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Bram Stoker's Dracula (1992)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Fahrenheit 9/11 (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Donnie Darko (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Bad Teacher (2011)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Cable Guy (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Ice Age (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Misery (1990)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "8 Mile (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Harry Potter and the Deathly Hallows: Part 2 (2011)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Ouija: Origin of Evil (2016)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Deer Hunter (1978)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "There's Something About Mary (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Zoolander (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Core (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Spirited Away (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Rocky (1976)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Traffic (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Monsters  Inc.(2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Thoroughly Modern Millie (1967)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Requiem for a Dream (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Downfall (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "L.A. Confidential (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Chicago (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Star Wars: Episode 1 - The Phantom Menace (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Rain Man (1988)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "What Lies Beneath (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Toy Story (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Boy's Don't Cry (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Pearl Harbor (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "A.I. Artificial Intelligence (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Sting (1973)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Scream 3 (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Congo (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Bowling For Columbine (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "What Women Want (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Home Alone (1990)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "How the Grinch Stole Christmas (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Straight Story (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Hulk (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Gigli (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Rocky V (1991)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Visit (2015)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Titanic (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "A Clockwork Orange (1971)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Charlie's Angels (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Friday the 13th Part III (1982)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Hannibal (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Pulp Fiction (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Crimson Tide (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Blow (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Ran (1985)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Mulholland Dr. (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Apocalypse Now (1979)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Cinema Paradiso (1988)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Double Jeopardy (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Big Lebowski (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Matrix (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Lord of the Rings: The Return of the King (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Reservoir Dogs (1992)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Heavy Traffic (1973)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Memento (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Dogville (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "American Psycho (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Kill Bill: Vol. 1 (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Fugitive (1993)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Bend it Like Beckham (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Austin Powers in Goldmember (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Mummy Returns (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Nightmare Before Christmas (1993)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "La La Land (2016)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Flowers in the Attic (1987)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "28 Days Later (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Princess Bride (1987)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Green Mile (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Predator (1987)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "A Night at the Roxbury (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Ed Wood (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Aliens (1986)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Meet the Parents (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Independence Day (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Who Framed Roger Rabbit (1988)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "As Good as it Gets (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Butch Cassidy and the Sundance Kid (1969)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "You're Next (2011)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Final Conflict (1981)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "City of God (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Star Wars: Episode VII - The Force Awakens (2015)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Transporter (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Cast Away (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Bad Boys 2 (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Babadook (2014)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Saw (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Star Wars: Episode VI - The Return of the Jedi (1983)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Scary Movie (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "E.T. The Extra-Terrestrial (1982)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "American History X (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "FeardotCom (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Halloween (1978)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Along Came a Spider (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Mist (2007)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Aladdin (1992)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Pirates of the Caribbean: The Curse of the Black Pearl (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Men in Black (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Eternal Sunshine of the Spotless Mind (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Ocean's Eleven (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Men in Black II (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Cocktail (1988)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Wolf of Wall Street (2013)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Game (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Red Sonja (1985)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "One Flew Over the Cuckoo's Nest (1975)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Freddy Got Fingered (2001)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Village (2004)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Miller's Crossing (1990)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "My Best Friend's Wedding (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Iron Man 3 (2013)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Big Daddy (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Suspiria (1977)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Passenger (1975)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Station Agent (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Jurassic Park (1993)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Captain America: Civil War (2016)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "A Perfect Murder (1998)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Analyze That (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Braveheart (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Inception (2010)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Groundhog Day (1993)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Lookout (2007)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "21 Grams (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Gladiator (2000)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Midnight Cowboy (1969)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Fatal Attraction (1987)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "House of Sand and Fog (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "On Golden Pond (1981)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Mummy (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Descent (2005)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Runaway Bride (1999)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Harry Potter and the Goblet of Fire (2005)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Gods and Generals (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "My Father and My Son (2005)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "X-Men 2 (2003)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Usual Suspects (1995)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The Mask (1994)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Jaws (1975)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Harry Potter and the Chamber of Secrets (2002)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Patton (1970)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Anaconda (1997)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Twister (1996)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "MacArthur (1977)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Look Who's Talking (1989)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I enjoy driving fast": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I enjoy rollercoasters ": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Have you ever bungee-jumped?": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I enjoy impulse shopping": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I sometimes go out on weeknights even if I have work to do": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I enjoy doing things without too much planning ": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Have you ever been rock climbing?": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I enjoy being in large loud crowds like the Times Square Ball Drop on New Years Eve": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I enjoy going to large music or dance festivals ": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I enjoy watching horror movies": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "No risk - No fun": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I like to be surprised even if it startles or scares me": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Have you ever parachuted?": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I enjoy haunted houses": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I had a sheltered upbringing": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "My life is very stressful": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I value my life to be well ordered and predictable": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Have you ridden a motorcycle?": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Have you gambled or bet for money?": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Have you ever been sky-diving?": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is talkative": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Tends to find fault with others": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Does a thorough job": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is depressed/Blue": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is original/comes up with new ideas": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is reserved": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is helpful and unselfish with others": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Can be somewhat careless": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is relaxed/handles stress well": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is curious about many different things": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is full of energy": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Starts quarrels with others": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is a reliable worker": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Can be tense": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is ingenious/a deep thinker": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Generates a lot of Enthusiasm": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Has a forgiving nature": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Tends to be disorganized": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Worries a lot": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Has an active imagination": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Tends to be quiet": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is generally trusting": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Tends to be lazy": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is emotionally stable/not easily upset": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "is inventive": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Has an assertive personality": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Can be cold and aloof": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Perseveres until the task is finished": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Can be moody": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Values artistic/aesthetic experiences": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is sometimes shy/inhibited": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is considerate and kind to almost everyone": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Does things efficiently": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Remains calm in tense situations": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Prefers work that is routine": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "is outgoing/sociable": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is sometimes rude to others": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Makes plans and follows through with them": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Gets nervous easily": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Likes to reflect/play with ideas": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Has few artistic interests": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Likes to cooperate with others": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is easily distracted": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Is sophisticated in art or music or literature": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I have cried during a movie": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I have trouble following the story of a movie": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "I have trouble remembering the story of a movie a couple of days after seeing it": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "When watching a movie I cheer or shout or talk or curse at the screen": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "When watching a movie I feel like the things on the screen are happening to me": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "As a movie unfolds I start to have problems keeping track of events that happened earlier": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "The emotions on the screen \"rub off\" on me - for instance if something sad is happening I get sad or if something frightening is happening I get scared": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "When watching a movie I get completely immersed in the alternative reality of the film": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Movies change my position on social economic or political issues": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "When watching movies things get so intense that I have to stop watching": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Gender identity (1 = female; 2 = male; 3 = self-described)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Are you an only child? (1: Yes; 0: No; -1: Did not respond)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    },
+    "Movies are best enjoyed alone (1: Yes; 0: No; -1: Did not respond)": {
+      "dtype": "object",
+      "label": null,
+      "measure": null,
+      "value_labels": null,
+      "missing_ranges": null
+    }
+  },
+  "na_token": "__RRG_NA__",
+  "outputs": [
+    "movie_ratings.csv",
+    "movie_ratings.parquet"
+  ],
+  "verification": {
+    "csv": {
+      "ok": true,
+      "max_numeric_diff": 0.0,
+      "exact": true,
+      "tolerance": 1e-09,
+      "string_mismatches": 0,
+      "nan_pattern_ok": true
+    },
+    "parquet": {
+      "ok": true,
+      "max_numeric_diff": 0.0,
+      "exact": true,
+      "tolerance": 1e-09,
+      "string_mismatches": 0,
+      "nan_pattern_ok": true
+    }
+  }
+}

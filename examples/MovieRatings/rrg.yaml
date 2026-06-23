@@ -1,0 +1,122 @@
+version: 1
+project:
+  name: MovieRatings demonstration
+paths:
+  shared: shared
+  data: data
+  operator: operator
+  packages: operator/_packages
+  compare_notes: operator/_compare_notes
+origin:
+  vendor: Human
+  model: Corina-Kaiser-2025
+  results_key: operator/origin
+  source_data: data/movieReplicationSet.csv
+files:
+  all:
+  - shared/STUDY_OVERVIEW.md
+  - shared/QUESTIONS.md
+  - shared/VALIDATION_INSTRUCTIONS.md
+  - data/movie_ratings.csv
+  - data/movie_ratings.parquet
+  - data/movie_ratings.meta.json
+  - data/movie_ratings.codebook.csv
+  stage_specific:
+  - file: shared/ANALYSIS_PROTOCOL_OG.md
+    send_in:
+    - replication
+  withheld:
+  - operator/origin/
+  - operator/**/SCORECARD_*
+  - operator/private/
+roster:
+  replication:
+  - model: Gemini 3.1 Pro
+    vendor: Google
+    type: frontier
+    license: record-at-run-time
+  robustness:
+  - model: DemoRobustnessModel
+    vendor: IndependentVendor
+    type: frontier
+    license: record-at-run-time
+  generalization: []
+stages:
+  replication:
+    order: 1
+    enabled: true
+    opens: model
+    methodology: revealed
+    prompt: prompts/replication.md
+    send:
+    - all
+    - shared/ANALYSIS_PROTOCOL_OG.md
+    output_folder: replication_{model}
+    report_name: '{model}_MovieRatings_Report.md'
+    blocked_reason: ''
+  robustness:
+    order: 2
+    enabled: true
+    opens: method
+    methodology: hidden
+    prompt: prompts/robustness.md
+    send:
+    - all
+    output_folder: robustness_{model}
+    report_name: '{model}_MovieRatings_Report.md'
+    blocked_reason: ''
+  generalization:
+    order: 3
+    enabled: false
+    blocked_reason: Define an independent sample or holdout policy before enabling.
+    opens: data
+    methodology: decide-in-cartridge
+    prompt: prompts/generalization.md
+    send:
+    - all
+    output_folder: generalization_{model}
+    report_name: '{model}_MovieRatings_Report.md'
+blinding:
+  always_withhold:
+  - origin/
+  - SCORECARD_*
+  - private/
+  - ORIGINAL_SPEC.pdf
+  - ORIGIN_REPORT.pdf
+  - ORIGINAL_METHODOLOGY.md
+  per_stage_methodology:
+    replication:
+      require:
+      - ANALYSIS_PROTOCOL_OG.md
+      forbid: []
+    robustness:
+      require: []
+      forbid:
+      - ANALYSIS_PROTOCOL_OG.md
+      - '*PROTOCOL*'
+      - ORIGINAL_METHODOLOGY.md
+    generalization:
+      require: []
+      forbid:
+      - ORIGINAL_METHODOLOGY.md
+  result_token_scan:
+    source: operator/origin
+    action: flag
+    exclude_globs:
+    - '*.csv'
+    - '*.parquet'
+    - '*.json'
+    - '*.pdf'
+    ignore_tokens:
+    - '0.005'
+constraints:
+  exclude_vendors:
+  - Human
+  determinism:
+    temperature: 0
+    seed: fixed
+dispatch:
+  start_template: agent run --model {model_slug}
+  model_slugs:
+    Gemini 3.1 Pro: provider/replication-model
+    DemoRobustnessModel: provider/robustness-model

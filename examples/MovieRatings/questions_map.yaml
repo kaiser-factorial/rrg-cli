@@ -1,0 +1,12 @@
+questions:
+  - {new: 1, original: 1, topic: Popularity and ratings}
+  - {new: 2, original: 2, topic: Release year and ratings}
+  - {new: 3, original: 3, topic: Shrek ratings by gender}
+  - {new: 4, original: 4, topic: Gender effects across movies}
+  - {new: 5, original: 5, topic: Lion King and only-child status}
+  - {new: 6, original: 6, topic: Only-child effects across movies}
+  - {new: 7, original: 7, topic: Wolf of Wall Street and social viewing}
+  - {new: 8, original: 8, topic: Social-viewing effects across movies}
+  - {new: 9, original: 9, topic: Home Alone versus Finding Nemo}
+  - {new: 10, original: 10, topic: Franchise consistency}
+  - {new: 11, original: 11, topic: Sensation-seeking effects}

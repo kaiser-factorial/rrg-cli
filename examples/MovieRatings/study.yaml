@@ -1,0 +1,58 @@
+study:
+  title: Hypothesis testing of movie ratings data
+  overview_file: shared/STUDY_OVERVIEW.md
+  dataset:
+    source: data/movieReplicationSet.csv
+    main_name: movie_ratings
+    merge_key: ''
+    formats:
+    - csv
+    - parquet
+    codebook: data/movie_ratings.codebook.csv
+    metadata: data/movie_ratings.meta.json
+    orientation: Analyze the 1,097 participant rows in {MAIN_DATASET}, available in the equivalent formats
+      {FORMATS}. Column definitions and conversion metadata are in {CODEBOOK} and {METADATA}. There is
+      no respondent identifier and no cross-file merge is required.
+    aux:
+      enabled: false
+      name: ''
+      file: ''
+      note: ''
+  given_solution:
+    enabled: false
+    glossary: ''
+    artifacts: []
+    note: ''
+  additional: []
+  questions:
+    file: shared/QUESTIONS.md
+    count: 11
+    map: questions_map.yaml
+  held_constants:
+    file: shared/VALIDATION_INSTRUCTIONS.md
+    summary: the 400 movie columns, participant coding, missing-value rules, significance threshold, named
+      movies, franchise keywords, and question order
+    qa_groups: gender, sibling status, movie-watching preference, and sensation seeking
+  original:
+    methodology_file: shared/ANALYSIS_PROTOCOL_OG.md
+    results_key: operator/origin
+    summary_file: operator/origin/SUMMARY.md
+    methodology_prompt: operator/OG_METHODOLOGY_PROMPT.md
+    model: Corina-Kaiser-2025
+    vendor: Human
+  deliverable:
+    report_name: '{MODEL}_MovieRatings_Report.md'
+    reporting_spec: >-
+      For each question, deliver a reproducible artifact chain: `Q<n>_analysis.py`
+      runs the analysis and writes `raw/Q<n>_raw.csv`; `Q<n>_fig.py` reads that and
+      writes `Q<n>_fig.png`. Also record `raw/Q<n>_summary.json` (machine-readable:
+      analysis N, group definitions, test and alternative, statistic, exact p-value,
+      descriptive summaries, multiplicity treatment, and a one-sentence conclusion at
+      alpha 0.005). Write the report in DYFA format: one section per question,
+      labelled `D - Do` (what you ran), `Y - Why`, `F - Find` (the result), and
+      `A - Answer`, embedding the matching `Q<n>_fig.png`. Provide `RAW.md` and
+      `SUMMARY.md` indexing the per-question artifacts.
+    method_guide:
+      enabled: false
+      name: ''
+      file: ''
