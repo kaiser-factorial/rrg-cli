@@ -104,6 +104,13 @@ def build_parser() -> argparse.ArgumentParser:
     importer.add_argument("--run-id", dest="run_id", help="target a specific build's run folder (ADR 0002)")
     importer.add_argument("--json", action="store_true")
 
+    ack = sub.add_parser(
+        "acknowledge-breach", help="acknowledge a flagged blinding breach so grading can proceed"
+    )
+    _add_project_args(ack)
+    ack.add_argument("--run", required=True, help="the run path the breach was recorded against")
+    ack.add_argument("--json", action="store_true")
+
     prompt = sub.add_parser("prompt", help="render a stage prompt")
     _add_project_args(prompt)
     prompt.add_argument("--stage", required=True)
@@ -193,10 +200,29 @@ def run(args: argparse.Namespace) -> int:
             project, args.stage, args.model, args.source, label=args.label, run_id=args.run_id
         )
         how = " (auto-resolved from RRG_RUN.txt)" if result.get("auto_resolved") else ""
-        _emit(
-            result if args.json else f"Imported {result['count']} files into {result['run']}{how}",
-            args.json,
-        )
+        breach = result.get("breach") or {}
+        if args.json:
+            _emit(result, args.json)
+        else:
+            print(f"Imported {result['count']} files into {result['run']}{how}")
+            copied = breach.get("copied_secrets") or []
+            if copied:
+                print(
+                    f"  ⚠ BLINDING BREACH: {len(copied)} returned file(s) match the withheld "
+                    "answer key — grading is blocked until acknowledged "
+                    "(rrg acknowledge-breach --run …):"
+                )
+                for item in copied:
+                    print(f"    - {item['returned']}  ==  {item['matches']}")
+            elif breach.get("ran_inside_project"):
+                print("  ⚠ note: returned outputs came from inside the project tree; "
+                      "isolation may have been skipped.")
+        return 3 if (breach.get("copied_secrets")) else 0
+    if args.command == "acknowledge-breach":
+        from . import grading as grading_module
+
+        result = grading_module.acknowledge_breach(project, args.run)
+        _emit(result if args.json else f"Breach acknowledged for {args.run}; grading unblocked.", args.json)
         return 0
     if args.command == "prompt":
         rendered = render_prompt(project, args.stage, args.model, mode=args.mode)

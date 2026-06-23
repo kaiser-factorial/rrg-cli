@@ -104,6 +104,51 @@ def test_import_without_marker_requires_stage_and_model(ready_project, tmp_path:
     assert result["count"] == 1 and result["auto_resolved"] is False
 
 
+def test_import_flags_copied_answer_key_and_blocks_grading(ready_project, tmp_path: Path):
+    from rrg_cli import grading
+
+    # Simulate a validator that copied the withheld origin answer key into its output.
+    key_bytes = ready_project.path("operator/origin/SUMMARY.md").read_bytes()
+    returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "leaked.md").write_bytes(key_bytes)
+
+    result = import_run(ready_project, "replication", "ReplicationModel", returned)
+    copied = result["breach"]["copied_secrets"]
+    assert copied and copied[0]["matches"] == "operator/origin/SUMMARY.md"
+
+    # Grading is blocked until the breach is acknowledged.
+    with pytest.raises(RRGError, match="blinding breach"):
+        grading.save_verdict(ready_project, result["run"], 1, "REPRODUCED", "", True)
+    grading.acknowledge_breach(ready_project, result["run"])
+    grading.save_verdict(ready_project, result["run"], 1, "REPRODUCED", "", True)  # unblocked
+
+
+def test_clean_import_records_no_breach(ready_project, tmp_path: Path):
+    from rrg_cli import grading
+
+    returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "SUMMARY.md").write_text("## Q1\nmy own reproduction", encoding="utf-8")
+    result = import_run(ready_project, "replication", "ReplicationModel", returned)
+    assert not result["breach"]["copied_secrets"]
+    assert result["breach"]["ran_inside_project"] is False
+    assert grading.load_breach(ready_project, result["run"]) is None
+
+
+def test_import_from_inside_project_warns_without_blocking(ready_project, tmp_path: Path):
+    from rrg_cli import grading
+
+    inside = ready_project.path("returned_inside")
+    inside.mkdir(parents=True)
+    (inside / "SUMMARY.md").write_text("## Q1\nok", encoding="utf-8")
+    result = import_run(ready_project, "replication", "ReplicationModel", inside)
+    assert result["breach"]["ran_inside_project"] is True
+    assert not result["breach"]["copied_secrets"]
+    # Soft signal only — grading is not blocked.
+    grading.save_verdict(ready_project, result["run"], 1, "REPRODUCED", "", True)
+
+
 def test_import_run_from_directory(ready_project, tmp_path: Path):
     returned = tmp_path / "returned"
     (returned / "raw").mkdir(parents=True)

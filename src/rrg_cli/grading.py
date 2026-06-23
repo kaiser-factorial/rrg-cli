@@ -30,6 +30,76 @@ def _grading_path(project: Project, run_value: str) -> Path:
     return _grading_dir(project) / f"{safe_label(Path(run_value).name)}-{digest}.json"
 
 
+def _breach_path(project: Project, run_value: str) -> Path:
+    digest = hashlib.sha256(run_value.encode()).hexdigest()[:12]
+    return _grading_dir(project) / f"{safe_label(Path(run_value).name)}-{digest}.breach.json"
+
+
+def load_breach(project: Project, run_value: str) -> dict[str, Any] | None:
+    """The breach record for a run (ADR 0002), or None if the run is clean."""
+    path = _breach_path(project, run_value)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def record_breach(
+    project: Project,
+    run_value: str,
+    *,
+    copied_secrets: list[dict[str, str]],
+    ran_inside_project: bool,
+) -> dict[str, Any] | None:
+    """Persist (or clear) a run's breach state after an import.
+
+    A *copied secret* — a returned file whose content matches the withheld answer key — is a
+    hard breach that blocks grading until acknowledged. ``ran_inside_project`` is a softer
+    signal (the run may have executed without isolation) that is recorded but does not block.
+    A fully clean import clears any prior record.
+    """
+    path = _breach_path(project, run_value)
+    if not copied_secrets and not ran_inside_project:
+        path.unlink(missing_ok=True)
+        return None
+    record = {
+        "run": run_value,
+        "copied_secrets": copied_secrets,
+        "ran_inside_project": bool(ran_inside_project),
+        "blocking": bool(copied_secrets),
+        "acknowledged": False,
+        "detected_at": datetime.now(timezone.utc).isoformat(),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
+    return record
+
+
+def acknowledge_breach(project: Project, run_value: str) -> dict[str, Any]:
+    breach = load_breach(project, run_value)
+    if not breach:
+        raise RRGError("no breach is recorded for this run")
+    breach["acknowledged"] = True
+    breach["acknowledged_at"] = datetime.now(timezone.utc).isoformat()
+    _breach_path(project, run_value).write_text(
+        json.dumps(breach, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    return breach
+
+
+def _guard_breach(project: Project, run_value: str) -> None:
+    breach = load_breach(project, run_value)
+    if breach and breach.get("blocking") and not breach.get("acknowledged"):
+        count = len(breach.get("copied_secrets") or [])
+        raise RRGError(
+            f"blinding breach: {count} returned file(s) match the withheld answer key; "
+            "grading is blocked until the breach is acknowledged"
+        )
+
+
 def questions(project: Project) -> list[dict[str, Any]]:
     map_path = project.path(project.study.get("questions", {}).get("map", "questions_map.yaml"))
     return load_question_map(map_path) if map_path.is_file() else []
@@ -85,6 +155,7 @@ def save_verdict(project: Project, run_value: str, question: int, verdict: str, 
         raise RRGError(f"unknown verdict: {verdict}")
     if confirmed and not verdict:
         raise RRGError("cannot confirm an empty verdict")
+    _guard_breach(project, run_value)
     data = load_grading(project, run_value)
     if data.get("finalized"):
         data["finalized"] = False  # editing reopens a finalized run
@@ -127,11 +198,13 @@ def overview(project: Project, run_value: str) -> dict[str, Any]:
         "graded": len(rows) > 0 and confirmed == len(rows),
         "finalized": bool(data.get("finalized")),
         "scorecard": data.get("scorecard"),
+        "breach": load_breach(project, run_value),
         "legend": VERDICTS,
     }
 
 
 def finalize(project: Project, run_value: str, stage: str, model: str, license_name: str = "record-at-run-time") -> dict[str, Any]:
+    _guard_breach(project, run_value)
     question_list = questions(project)
     if not is_graded(project, run_value, question_list):
         raise RRGError("every question needs a confirmed verdict before finalizing")

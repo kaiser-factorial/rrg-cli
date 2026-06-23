@@ -548,6 +548,11 @@ class GUIState:
             self._run_record(run_value)
             return grading_module.reopen(self.project, run_value)
 
+    def acknowledge_breach(self, run_value: str) -> dict[str, Any]:
+        with self._lock:
+            self._run_record(run_value)
+            return grading_module.acknowledge_breach(self.project, run_value)
+
     def delete_grading(self, run_value: str) -> dict[str, Any]:
         with self._lock:
             self._run_record(run_value)

@@ -14,9 +14,10 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from . import grading as grading_module
 from .errors import RRGError
 from .project import Project
-from .utils import safe_label
+from .utils import safe_label, sha256
 
 RUN_MARKER_NAME = "RRG_RUN.txt"
 
@@ -108,6 +109,70 @@ def run_output_folder(
     return operator_root / base
 
 
+def _withheld_hashes(project: Project, stage_id: str) -> dict[str, str]:
+    """sha256 -> human path for every withheld secret a validator at this stage must not hold.
+
+    The universal set is the configured ``files.withheld`` (the origin answer key, private
+    operator files, scorecards). For stages that hide the methodology (e.g. robustness), the
+    original methodology file is added too — a robustness validator legitimately never has it,
+    so a byte-identical copy in its output is a breach. Replication, which is *given* the
+    methodology, is unaffected because its stage does not hide it.
+    """
+    root = project.root.resolve()
+    patterns = list(
+        project.config.get("files", {}).get("withheld", [])
+        or ["operator/origin/", "operator/private/", "operator/**/SCORECARD_*"]
+    )
+    secrets: set[Path] = set()
+    for pattern in patterns:
+        cleaned = str(pattern).rstrip("/")
+        base = root / cleaned
+        if base.is_dir():
+            secrets.update(path for path in base.rglob("*") if path.is_file())
+        else:
+            secrets.update(path for path in root.glob(cleaned) if path.is_file())
+    stage = project.stage(stage_id)
+    if str(stage.get("methodology", "")).lower() == "hidden":
+        methodology = project.study.get("original", {}).get("methodology_file")
+        if methodology:
+            candidate = project.path(methodology)
+            if candidate.is_file():
+                secrets.add(candidate)
+    hashes: dict[str, str] = {}
+    for path in secrets:
+        try:
+            hashes[sha256(path)] = str(path.relative_to(root))
+        except (OSError, ValueError):
+            continue
+    return hashes
+
+
+def detect_breach(
+    project: Project, stage_id: str, destination: Path, source: Path
+) -> dict[str, Any]:
+    """Compare returned files against the withheld answer key (ADR 0002).
+
+    A content match means the validator *copied* a secret, not merely reproduced a result —
+    a near-certain blinding breach. Also reports whether the returned outputs came from inside
+    the project tree, a softer signal that isolation may have been skipped.
+    """
+    secrets = _withheld_hashes(project, stage_id)
+    copied: list[dict[str, str]] = []
+    if secrets:
+        for path in sorted(destination.rglob("*")):
+            if not path.is_file() or path.name in {"_breach.json", ".DS_Store"}:
+                continue
+            match = secrets.get(sha256(path))
+            if match:
+                copied.append({"returned": str(path.relative_to(destination)), "matches": match})
+    try:
+        source.resolve().relative_to(project.root.resolve())
+        ran_inside = True
+    except ValueError:
+        ran_inside = False
+    return {"copied_secrets": copied, "ran_inside_project": ran_inside}
+
+
 def _safe_target(destination: Path, member: str) -> Path:
     target = (destination / member).resolve()
     try:
@@ -178,8 +243,17 @@ def import_run(
     else:
         raise RRGError("returned output must be a .zip file or a directory")
 
+    run_value = str(destination.relative_to(project.root))
+    breach = detect_breach(project, stage_id, destination, source)
+    grading_module.record_breach(
+        project,
+        run_value,
+        copied_secrets=breach["copied_secrets"],
+        ran_inside_project=breach["ran_inside_project"],
+    )
+
     return {
-        "run": str(destination.relative_to(project.root)),
+        "run": run_value,
         "output_folder": str(destination),
         "run_id": run_id,
         "stage": stage_id,
@@ -187,4 +261,5 @@ def import_run(
         "auto_resolved": matched,
         "imported": sorted(imported),
         "count": len(imported),
+        "breach": breach,
     }
