@@ -91,6 +91,7 @@ def build_scorecard(
     map_path: Path | None = None,
     output_dir: Path | None = None,
     license_name: str = "record-at-run-time",
+    verdicts: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     run_dir = run_dir.resolve()
     if not run_dir.is_dir():
@@ -105,10 +106,16 @@ def build_scorecard(
     label = safe_label(model)
     version, prior = _next_version(output_dir, stage, label)
     destination = output_dir / f"SCORECARD_{stage}_{label}_v{version}.md"
+    graded = bool(verdicts)
+    subtitle = (
+        "*Operator-only. Verdicts below were confirmed by a human grader.*"
+        if graded
+        else "*Operator-only. Every verdict is **PROVISIONAL** until confirmed by a human grader.*"
+    )
     lines = [
         f"# Validation Scorecard — {stage} / {model} — v{version}",
         "",
-        "*Operator-only. Every verdict is **PROVISIONAL** until confirmed by a human grader.*",
+        subtitle,
         "",
         f"- Run: `{run_dir}`",
         f"- Results key: `{key_dir}`",
@@ -124,12 +131,19 @@ def build_scorecard(
         "| Q | Topic | Verdict | Method vs. original | Validator material | Held-back key material | Note |",
         "|---:|---|---|---|---|---|---|",
     ]
+    tally: dict[str, int] = {}
     for row in questions:
         validator = _cell(_material(run_dir, row["new"]))
         key = _cell(_material(key_dir, row["original"]))
+        entry = (verdicts or {}).get(row["new"]) or (verdicts or {}).get(str(row["new"])) or {}
+        verdict = str(entry.get("verdict") or "PENDING")
+        note = _cell(str(entry.get("note") or "")) or f"orig Q{row['original']}"
+        tally[verdict] = tally.get(verdict, 0) + 1
+        verdict_cell = verdict if graded else "**PENDING**"
         lines.append(
-            f"| {row['new']} | {_cell(row['topic'])} | **PENDING** | _(record)_ | {validator} | {key} | orig Q{row['original']} |"
+            f"| {row['new']} | {_cell(row['topic'])} | {verdict_cell} | _(record)_ | {validator} | {key} | {note} |"
         )
+    tally_rows = [f"| {name} | {count} |" for name, count in tally.items()] or ["| PENDING | 0 |"]
     lines.extend(
         [
             "",
@@ -137,7 +151,7 @@ def build_scorecard(
             "",
             "| Verdict | Count |",
             "|---|---:|",
-            "| PENDING | " + str(len(questions)) + " |",
+            *tally_rows,
             "",
             "## Method-choice distribution",
             "",
@@ -154,7 +168,7 @@ def build_scorecard(
         ]
     )
     text = "\n".join(lines)
-    if re.search(r"\|\s*\*\*(?:" + "|".join(FINAL_VERDICTS) + r")\*\*\s*\|", text):
+    if not graded and re.search(r"\|\s*\*\*(?:" + "|".join(FINAL_VERDICTS) + r")\*\*\s*\|", text):
         raise RRGError("scorecard scaffold unexpectedly contains a final verdict")
     destination.write_text(text, encoding="utf-8")
     return {

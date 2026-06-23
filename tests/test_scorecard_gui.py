@@ -267,5 +267,6 @@ def test_runs_compare_and_notes_exclude_withheld_key(ready_project):
     assert "operator/origin" not in paths
     comparison = state.compare("operator/robustness_TestModel", 1)
     assert len(comparison["validator"]) == len(comparison["original"]) == 1
-    state.save_note("operator/robustness_TestModel", 1, "Check axis labels")
-    assert state.compare("operator/robustness_TestModel", 1)["note"] == "Check axis labels"
+    state.save_verdict("operator/robustness_TestModel", 1, "DIVERGED", "Check axis labels", True)
+    graded = state.compare("operator/robustness_TestModel", 1)
+    assert graded["note"] == "Check axis labels" and graded["verdict"] == "DIVERGED" and graded["confirmed"] is True

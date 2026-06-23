@@ -35,6 +35,8 @@ study:
     results_key: operator/origin
     model: OriginModel
     vendor: OriginVendor
+    summary_file: operator/origin/SUMMARY.md
+    methodology_prompt: operator/OG_METHODOLOGY_PROMPT.md
   deliverable:
     report_name: "{MODEL}_Report.docx"
     reporting_spec: >-

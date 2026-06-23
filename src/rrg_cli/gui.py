@@ -42,13 +42,27 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+                "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'",
             )
             self.end_headers()
             self.wfile.write(payload)
 
         def _json(self, value, status_code: int = 200) -> None:
             self._send(status_code, json.dumps(value, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+
+        def _send_pdf(self, payload: bytes, content_type: str) -> None:
+            # Served into an iframe on the same origin, so the page must be able to
+            # frame it (frame-ancestors 'self'); everything else is locked down.
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'")
+            self.end_headers()
+            self.wfile.write(payload)
 
         def _authorized(self) -> bool:
             return secrets.compare_digest(self.headers.get("X-RRG-Token", ""), session_token)
@@ -76,6 +90,14 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     return self._send(200, _asset("app.js"), "text/javascript; charset=utf-8")
                 if not path.startswith("/api/"):
                     return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+                if path == "/api/origin/report.pdf":
+                    # An iframe cannot send the auth header, so this stream accepts the
+                    # session token via header or query param (local origin only).
+                    token = self.headers.get("X-RRG-Token", "") or query.get("token", "")
+                    if not secrets.compare_digest(token, session_token):
+                        return self._json({"error": "invalid local GUI session"}, HTTPStatus.FORBIDDEN)
+                    payload, content_type = state.origin_report_bytes()
+                    return self._send_pdf(payload, content_type)
                 if not self._require_api_auth():
                     return
                 if path == "/api/bootstrap":
@@ -96,8 +118,16 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     return self._json(state.compare(query.get("run", ""), int(query.get("question", "0"))))
                 if path == "/api/scorecards":
                     return self._json({"scorecards": state.scorecards()})
+                if path == "/api/grading":
+                    return self._json(state.grading_overview(query.get("run", "")))
                 if path == "/api/scorecard":
                     return self._json(state.scorecard_content(query.get("path", "")))
+                if path == "/api/origin":
+                    return self._json(state.origin_overview())
+                if path == "/api/origin/report":
+                    return self._json(state.origin_report())
+                if path == "/api/origin/methodology_prompt":
+                    return self._json(state.methodology_prompt())
                 return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             except RRGError as exc:
                 return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
@@ -140,6 +170,24 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     }
                 elif path == "/api/setup":
                     result = state.save_setup(payload)
+                elif path == "/api/origin/methodology":
+                    result = {**state.save_methodology(str(payload.get("text", ""))), "origin": state.origin_overview()}
+                elif path == "/api/grading/verdict":
+                    result = state.save_verdict(
+                        str(payload.get("run", "")),
+                        int(payload.get("question", 0)),
+                        str(payload.get("verdict", "")),
+                        str(payload.get("note", "")),
+                        bool(payload.get("confirmed")),
+                    )
+                elif path == "/api/grading/finalize":
+                    result = state.finalize_grading(str(payload.get("run", "")))
+                elif path == "/api/grading/reopen":
+                    result = state.reopen_grading(str(payload.get("run", "")))
+                elif path == "/api/grading/delete":
+                    result = state.delete_grading(str(payload.get("run", "")))
+                elif path == "/api/scorecard/delete":
+                    result = state.delete_scorecard(str(payload.get("path", "")))
                 elif path == "/api/project/select":
                     result = state.select_project(str(payload.get("root", "")))
                 elif path == "/api/project/create":

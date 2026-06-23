@@ -170,6 +170,21 @@ class WorkspaceState:
         with self._lock:
             return inspect_project(self._state.project, stage=stage, strict=True)
 
+    def origin_overview(self):
+        return self._call("origin_overview")
+
+    def origin_report(self):
+        return self._call("origin_report")
+
+    def origin_report_bytes(self):
+        return self._call("origin_report_bytes")
+
+    def methodology_prompt(self):
+        return self._call("methodology_prompt")
+
+    def save_methodology(self, *args, **kwargs):
+        return self._call("save_methodology", *args, **kwargs)
+
     def render(self, *args, **kwargs):
         return self._call("render", *args, **kwargs)
 
@@ -187,6 +202,24 @@ class WorkspaceState:
 
     def scorecards(self):
         return self._call("scorecards")
+
+    def grading_overview(self, *args, **kwargs):
+        return self._call("grading_overview", *args, **kwargs)
+
+    def save_verdict(self, *args, **kwargs):
+        return self._call("save_verdict", *args, **kwargs)
+
+    def finalize_grading(self, *args, **kwargs):
+        return self._call("finalize_grading", *args, **kwargs)
+
+    def reopen_grading(self, *args, **kwargs):
+        return self._call("reopen_grading", *args, **kwargs)
+
+    def delete_grading(self, *args, **kwargs):
+        return self._call("delete_grading", *args, **kwargs)
+
+    def delete_scorecard(self, *args, **kwargs):
+        return self._call("delete_scorecard", *args, **kwargs)
 
     def scorecard_content(self, *args, **kwargs):
         return self._call("scorecard_content", *args, **kwargs)

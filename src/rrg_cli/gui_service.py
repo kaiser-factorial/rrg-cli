@@ -11,6 +11,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from . import grading as grading_module
+from . import origin as origin_module
 from .converter import convert_dataset
 from .doctor import inspect_project
 from .errors import RRGError
@@ -78,16 +80,32 @@ class GUIState:
         value = self.project.study.get("questions", {}).get("map", "questions_map.yaml")
         return load_question_map(self.project.path(value))
 
+    def _finalized_scorecards(self) -> set[str]:
+        finalized: set[str] = set()
+        grading_dir = self.project.path_setting("grading", "operator/_grading")
+        if grading_dir.is_dir():
+            for path in grading_dir.glob("*.json"):
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+                if isinstance(data, dict) and data.get("finalized") and data.get("scorecard"):
+                    finalized.add(str(data["scorecard"]))
+        return finalized
+
     def scorecards(self) -> list[dict[str, Any]]:
         operator = self.project.path_setting("operator", "operator")
+        finalized = self._finalized_scorecards()
         cards = []
         for path in sorted(operator.glob("SCORECARD_*.md"), key=lambda item: item.stat().st_mtime, reverse=True):
+            relative = str(path.relative_to(self.project.root))
             cards.append(
                 {
-                    "path": str(path.relative_to(self.project.root)),
+                    "path": relative,
                     "name": path.name,
                     "size": path.stat().st_size,
                     "modified": path.stat().st_mtime,
+                    "protected": relative in finalized,
                 }
             )
         return cards
@@ -119,7 +137,7 @@ class GUIState:
         excluded = self._excluded_run_roots()
         package_root = self.project.path_setting("packages", "operator/_packages")
         rows = []
-        scorecard_names = " ".join(card["name"].lower() for card in self.scorecards())
+        question_list = self.questions()
         for path in sorted(candidates, key=lambda item: item.name.lower()):
             try:
                 path.resolve().relative_to(operator.resolve())
@@ -135,15 +153,17 @@ class GUIState:
             stage = str(record.get("stage") or self._infer_stage(path.name))
             model = str(record.get("model") or path.name)
             files = [item for item in path.rglob("*") if item.is_file()] if path.is_dir() else []
+            relative = str(path.relative_to(self.project.root))
+            returned = bool(files)
             rows.append(
                 {
-                    "path": str(path.relative_to(self.project.root)),
+                    "path": relative,
                     "name": path.name,
                     "stage": stage,
                     "model": model,
-                    "returned": bool(files),
+                    "returned": returned,
                     "file_count": len(files),
-                    "graded": safe_label(model).lower() in scorecard_names and stage.lower() in scorecard_names,
+                    "graded": returned and grading_module.is_graded(self.project, relative, question_list),
                 }
             )
         return rows
@@ -208,6 +228,7 @@ class GUIState:
             "runs": self.runs(),
             "scorecards": self.scorecards(),
             "dispatch_start": str(self.project.config.get("dispatch", {}).get("start_template", "")),
+            "dispatch_slugs": self.project.config.get("dispatch", {}).get("model_slugs", {}) or {},
             "dataset": {
                 "source": dataset.get("source") or self.project.config.get("origin", {}).get("source_data", ""),
                 "main_name": dataset.get("main_name", ""),
@@ -285,13 +306,20 @@ class GUIState:
                 )
             return output
 
-        notes = self.load_notes(run_value)
+        material = grading_module.question_material(self.project, run_value, question_number, question["original"])
+        grading_state = grading_module.load_grading(self.project, run_value)
+        verdict_entry = grading_state["verdicts"].get(str(question_number), {})
         return {
             "run": run,
             "question": question,
             "validator": encoded(self._figure_matches(run_root, question_number), run_root),
             "original": encoded(self._figure_matches(key_root, question["original"]), key_root),
-            "note": notes.get(str(question_number), ""),
+            "validator_text": material["validator_text"],
+            "original_text": material["origin_text"],
+            "verdict": verdict_entry.get("verdict", ""),
+            "note": verdict_entry.get("note", ""),
+            "confirmed": bool(verdict_entry.get("confirmed")),
+            "legend": grading_module.VERDICTS,
         }
 
     def _notes_path(self, run_value: str) -> Path:
@@ -327,6 +355,22 @@ class GUIState:
             raise RRGError("scorecard is not an allowed operator scorecard")
         path = self.project.path(value)
         return {"path": value, "text": path.read_text(encoding="utf-8", errors="replace")}
+
+    def origin_overview(self) -> dict[str, Any]:
+        return origin_module.origin_overview(self.project)
+
+    def origin_report(self) -> dict[str, Any]:
+        return origin_module.origin_report(self.project)
+
+    def origin_report_bytes(self) -> tuple[bytes, str]:
+        return origin_module.origin_report_bytes(self.project)
+
+    def methodology_prompt(self) -> dict[str, Any]:
+        return origin_module.methodology_prompt(self.project)
+
+    def save_methodology(self, text: str) -> dict[str, Any]:
+        with self._lock:
+            return origin_module.save_methodology(self.project, text)
 
     def render(self, stage: str, model: str, mode: str) -> dict[str, Any]:
         prompt = render_prompt(self.project, stage, model, mode=mode)
@@ -376,6 +420,42 @@ class GUIState:
             license_name=str(payload.get("license") or "record-at-run-time"),
         )
 
+    def _run_record(self, run_value: str) -> dict[str, Any]:
+        record = next((run for run in self.runs() if run["path"] == run_value), None)
+        if record is None:
+            raise RRGError("run is not an allowed validator output folder")
+        return record
+
+    def grading_overview(self, run_value: str) -> dict[str, Any]:
+        record = self._run_record(run_value)
+        return {**grading_module.overview(self.project, run_value), "returned": record["returned"], "stage": record["stage"], "model": record["model"]}
+
+    def save_verdict(self, run_value: str, question: int, verdict: str, note: str, confirmed: bool) -> dict[str, Any]:
+        with self._lock:
+            record = self._run_record(run_value)
+            if not record["returned"]:
+                raise RRGError("run has not returned yet; nothing to grade")
+            return grading_module.save_verdict(self.project, run_value, question, verdict, note, confirmed)
+
+    def finalize_grading(self, run_value: str) -> dict[str, Any]:
+        with self._lock:
+            record = self._run_record(run_value)
+            return grading_module.finalize(self.project, run_value, record["stage"], record["model"])
+
+    def reopen_grading(self, run_value: str) -> dict[str, Any]:
+        with self._lock:
+            self._run_record(run_value)
+            return grading_module.reopen(self.project, run_value)
+
+    def delete_grading(self, run_value: str) -> dict[str, Any]:
+        with self._lock:
+            self._run_record(run_value)
+            return grading_module.delete_grading(self.project, run_value)
+
+    def delete_scorecard(self, value: str) -> dict[str, Any]:
+        with self._lock:
+            return grading_module.delete_scorecard(self.project, value)
+
     def save_setup(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             study_patch = payload.get("study") or {}
@@ -416,6 +496,8 @@ class GUIState:
                     raw_config["roster"] = config_patch["roster"]
                 if "dispatch_start" in config_patch:
                     raw_config.setdefault("dispatch", {})["start_template"] = config_patch["dispatch_start"]
+                if "model_slugs" in config_patch and isinstance(config_patch["model_slugs"], dict):
+                    raw_config.setdefault("dispatch", {})["model_slugs"] = config_patch["model_slugs"]
                 _atomic_yaml(self.project.config_path, raw_config)
             self.reload()
             return self.bootstrap()
