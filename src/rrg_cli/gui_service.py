@@ -505,8 +505,8 @@ class GUIState:
         with self._lock:
             return importer_module.import_run(
                 self.project,
-                str(payload.get("stage", "")),
-                str(payload.get("model", "")),
+                payload.get("stage") or None,
+                payload.get("model") or None,
                 str(payload.get("source", "")),
                 label=payload.get("label") or None,
                 run_id=payload.get("run_id") or None,

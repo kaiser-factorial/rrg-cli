@@ -67,6 +67,43 @@ def test_import_without_run_id_resolves_latest_build(ready_project, tmp_path: Pa
     assert result["output_folder"] == latest["output_folder"]
 
 
+def test_delivery_zip_carries_run_marker(ready_project):
+    result = build_package(ready_project, "replication", "ReplicationModel")
+    with zipfile.ZipFile(result["package_zip"]) as bundle:
+        assert "RRG_RUN.txt" in bundle.namelist()
+        marker = bundle.read("RRG_RUN.txt").decode("utf-8")
+    # Marker is blinding-safe: only the opaque run_id, nothing about study/methods/results.
+    assert result["run_id"] in marker
+    assert "ReplicationModel" not in marker and "replication" not in marker
+
+
+def test_import_auto_resolves_from_marker(ready_project, tmp_path: Path):
+    from rrg_cli.importer import render_run_marker
+
+    built = build_package(ready_project, "robustness", "RobustnessModel")
+    bundle = tmp_path / "returned.zip"
+    with zipfile.ZipFile(bundle, "w") as archive:
+        archive.writestr("RRG_RUN.txt", render_run_marker(built["run_id"]))
+        archive.writestr("SUMMARY.md", "## Q1\nok")
+    # No stage/model passed — the marker drives full resolution.
+    result = import_run(ready_project, source=bundle)
+    assert result["auto_resolved"] is True
+    assert result["stage"] == "robustness" and result["model"] == "RobustnessModel"
+    assert result["run_id"] == built["run_id"]
+    assert result["output_folder"] == built["output_folder"]
+
+
+def test_import_without_marker_requires_stage_and_model(ready_project, tmp_path: Path):
+    returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "SUMMARY.md").write_text("## Q1\nok", encoding="utf-8")
+    with pytest.raises(RRGError, match="could not resolve the run"):
+        import_run(ready_project, source=returned)
+    # Explicit stage/model still works as the manual fallback.
+    result = import_run(ready_project, "replication", "ReplicationModel", returned)
+    assert result["count"] == 1 and result["auto_resolved"] is False
+
+
 def test_import_run_from_directory(ready_project, tmp_path: Path):
     returned = tmp_path / "returned"
     (returned / "raw").mkdir(parents=True)

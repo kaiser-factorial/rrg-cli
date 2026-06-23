@@ -10,6 +10,7 @@ from typing import Any
 
 from .blinding import lint_package
 from .errors import RRGError
+from .importer import RUN_MARKER_NAME, render_run_marker
 from .project import Project
 from .prompts import render_prompt
 from .routing import RoutedInput, resolve_send
@@ -126,6 +127,8 @@ def build_package(
                 for path in sorted(destination.rglob("*")):
                     if path.is_file() and path.name not in {"_provenance.json", ".DS_Store"}:
                         bundle.write(path, path.relative_to(destination))
+                # Opaque marker so a returned result set re-binds to this build on import.
+                bundle.writestr(RUN_MARKER_NAME, render_run_marker(run_id))
             package_zip = str(zip_path)
             output_folder.mkdir(parents=True, exist_ok=True)
             log_path = package_root / "provenance_log.jsonl"

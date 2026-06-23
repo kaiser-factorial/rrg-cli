@@ -98,8 +98,8 @@ def build_parser() -> argparse.ArgumentParser:
     importer = sub.add_parser("import", help="import a validator's returned outputs into its run folder")
     _add_project_args(importer)
     importer.add_argument("source", help="the returned folder or .zip from the validator")
-    importer.add_argument("--stage", required=True)
-    importer.add_argument("--model", required=True)
+    importer.add_argument("--stage", help="optional; auto-resolved from the RRG_RUN.txt marker when omitted")
+    importer.add_argument("--model", help="optional; auto-resolved from the RRG_RUN.txt marker when omitted")
     importer.add_argument("--label")
     importer.add_argument("--run-id", dest="run_id", help="target a specific build's run folder (ADR 0002)")
     importer.add_argument("--json", action="store_true")
@@ -192,7 +192,11 @@ def run(args: argparse.Namespace) -> int:
         result = import_run(
             project, args.stage, args.model, args.source, label=args.label, run_id=args.run_id
         )
-        _emit(result if args.json else f"Imported {result['count']} files into {result['run']}", args.json)
+        how = " (auto-resolved from RRG_RUN.txt)" if result.get("auto_resolved") else ""
+        _emit(
+            result if args.json else f"Imported {result['count']} files into {result['run']}{how}",
+            args.json,
+        )
         return 0
     if args.command == "prompt":
         rendered = render_prompt(project, args.stage, args.model, mode=args.mode)

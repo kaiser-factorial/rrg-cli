@@ -8,6 +8,7 @@ folder (zip-slip / path-traversal protection).
 
 from __future__ import annotations
 
+import json
 import shutil
 import zipfile
 from pathlib import Path
@@ -16,6 +17,71 @@ from typing import Any
 from .errors import RRGError
 from .project import Project
 from .utils import safe_label
+
+RUN_MARKER_NAME = "RRG_RUN.txt"
+
+
+def render_run_marker(run_id: str) -> str:
+    """The blinding-safe marker shipped in a delivery zip (ADR 0002).
+
+    Contains only the opaque ``run_id`` — no study, method, or result information. The
+    validator is asked to return it unchanged so RRG can bind their results back to this build.
+    """
+    return (
+        f"run_id: {run_id}\n"
+        "\n"
+        "This file binds your returned results to the validation package you received.\n"
+        "Please return it unchanged alongside your outputs. It is an opaque identifier and\n"
+        "carries no information about the study, its methods, or any expected result.\n"
+    )
+
+
+def parse_run_marker(text: str) -> str | None:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("run_id:"):
+            value = stripped.split(":", 1)[1].strip()
+            return value or None
+    return None
+
+
+def read_run_marker(source: Path) -> str | None:
+    """Best-effort read of the ``run_id`` from a returned folder or zip; None if absent."""
+    try:
+        if source.is_file() and source.suffix.lower() == ".zip":
+            with zipfile.ZipFile(source) as bundle:
+                names = [name for name in bundle.namelist() if Path(name).name == RUN_MARKER_NAME]
+                if not names:
+                    return None
+                with bundle.open(sorted(names, key=len)[0]) as handle:
+                    return parse_run_marker(handle.read().decode("utf-8", "replace"))
+        if source.is_dir():
+            direct = source / RUN_MARKER_NAME
+            candidate = direct if direct.is_file() else next(iter(sorted(source.rglob(RUN_MARKER_NAME))), None)
+            if candidate and candidate.is_file():
+                return parse_run_marker(candidate.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, zipfile.BadZipFile):
+        return None
+    return None
+
+
+def lookup_provenance(project: Project, run_id: str) -> dict[str, Any] | None:
+    """Return the most recent provenance-log record whose run_id matches, or None."""
+    log_path = project.path_setting("packages", "operator/_packages") / "provenance_log.jsonl"
+    if not log_path.is_file():
+        return None
+    found: dict[str, Any] | None = None
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if record.get("run_id") == run_id:
+            found = record
+    return found
 
 
 def run_output_folder(
@@ -53,20 +119,40 @@ def _safe_target(destination: Path, member: str) -> Path:
 
 def import_run(
     project: Project,
-    stage_id: str,
-    model_query: str,
-    source: str | Path,
+    stage_id: str | None = None,
+    model_query: str | None = None,
+    source: str | Path | None = None,
     *,
     label: str | None = None,
     run_id: str | None = None,
 ) -> dict[str, Any]:
+    if source is None:
+        raise RRGError("a returned folder or .zip is required")
+    source = Path(source).expanduser().resolve()
+    if not source.exists():
+        raise RRGError(f"returned output not found: {source}")
+
+    # Auto-resolve from the in-package RRG_RUN.txt marker (ADR 0002). An explicit run_id wins;
+    # otherwise the marker supplies it. A matching provenance record fills in any stage/model/
+    # label not given by the caller. Explicit arguments always take precedence.
+    run_id = run_id or read_run_marker(source)
+    record = lookup_provenance(project, run_id) if run_id else None
+    matched = bool(record)
+    if record:
+        stage_id = stage_id or record.get("stage")
+        model_query = model_query or record.get("model")
+        if label is None:
+            label = record.get("label")
+    if not stage_id or not model_query:
+        raise RRGError(
+            "could not resolve the run: no RRG_RUN.txt marker matched a logged build; "
+            "pass --stage and --model explicitly"
+        )
+
     project.stage(stage_id)  # validate stage exists
     roster_entry = project.model(stage_id, model_query)
     run_label = label or safe_label(roster_entry.get("model") if roster_entry else model_query)
     destination = run_output_folder(project, stage_id, run_label, run_id).resolve()
-    source = Path(source).expanduser().resolve()
-    if not source.exists():
-        raise RRGError(f"returned output not found: {source}")
 
     destination.mkdir(parents=True, exist_ok=True)
     imported: list[str] = []
@@ -96,6 +182,9 @@ def import_run(
         "run": str(destination.relative_to(project.root)),
         "output_folder": str(destination),
         "run_id": run_id,
+        "stage": stage_id,
+        "model": model_query,
+        "auto_resolved": matched,
         "imported": sorted(imported),
         "count": len(imported),
     }
