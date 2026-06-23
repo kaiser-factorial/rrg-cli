@@ -38,10 +38,16 @@ study:
     summary_file: operator/origin/SUMMARY.md
     methodology_prompt: operator/OG_METHODOLOGY_PROMPT.md
   deliverable:
-    report_name: "{MODEL}_Report.docx"
+    report_name: "{MODEL}_Report.md"
     reporting_spec: >-
-      Report the analysis N, descriptive inputs, point estimate, uncertainty,
-      effect size where applicable, and a one-sentence conclusion per question.
+      For each question, deliver a reproducible artifact chain: `Q<n>_analysis.py`
+      runs the analysis and writes `raw/Q<n>_raw.csv`; `Q<n>_fig.py` reads that and
+      writes `Q<n>_fig.png`. Also record `raw/Q<n>_summary.json` (machine-readable:
+      analysis N, descriptive inputs, point estimate, uncertainty, effect size where
+      applicable, and a one-sentence conclusion). Write the report in DYFA format: one
+      section per question, labelled `D - Do` (what you ran), `Y - Why`, `F - Find`
+      (the result), and `A - Answer`, embedding the matching `Q<n>_fig.png`. Provide
+      `RAW.md` and `SUMMARY.md` indexing the per-question artifacts.
     method_guide:
       enabled: false
       name: ""

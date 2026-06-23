@@ -54,7 +54,7 @@ stages:
     prompt: prompts/replication.md
     send: [all, shared/ANALYSIS_PROTOCOL_OG.md]
     output_folder: replication_{model}
-    report_name: "{model}_Report.docx"
+    report_name: "{model}_Report.md"
   robustness:
     order: 2
     enabled: true
@@ -63,7 +63,7 @@ stages:
     prompt: prompts/robustness.md
     send: [all]
     output_folder: robustness_{model}
-    report_name: "{model}_Report.docx"
+    report_name: "{model}_Report.md"
   generalization:
     order: 3
     enabled: false
@@ -73,7 +73,7 @@ stages:
     prompt: prompts/generalization.md
     send: [all]
     output_folder: generalization_{model}
-    report_name: "{model}_Report.docx"
+    report_name: "{model}_Report.md"
 
 blinding:
   always_withhold:

@@ -10,9 +10,8 @@ in {OUTPUT_FOLDER}. Do not begin analysis until you confirm the inputs load.
 
 ## Turn 2 — Execute
 
-Execute {ORIGINAL_PROTOCOL} exactly for all {N_QUESTIONS} questions. Deliver
-`RAW.md`, `SUMMARY.md`, per-question scripts and figures, and {REPORT_NAME}.
-{REPORTING_SPEC}
+Execute {ORIGINAL_PROTOCOL} exactly for all {N_QUESTIONS} questions, then compile
+{REPORT_NAME}. {REPORTING_SPEC}
 
 ## Operator reminders
 

@@ -14,8 +14,8 @@ Design a defensible method for every question, reconsider each choice, and write
 
 ## Turn 3 — Execute
 
-After operator confirmation, execute `APPROACH.md`. Deliver `RAW.md`, `SUMMARY.md`,
-per-question scripts and figures, and {REPORT_NAME}. {REPORTING_SPEC}
+After operator confirmation, execute `APPROACH.md`, then compile {REPORT_NAME}.
+{REPORTING_SPEC}
 
 ## Operator reminders
 
