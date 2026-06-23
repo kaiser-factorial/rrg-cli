@@ -18,10 +18,30 @@ function loading(text='Loading…'){app.innerHTML=`<div class="card loading">${e
 function value(id){return document.getElementById(id)?.value??''}
 function checked(id){return !!document.getElementById(id)?.checked}
 function lines(text){return String(text||'').split('\n').map(item=>item.trim()).filter(Boolean)}
+function figStem(s){return String(s).split('/').pop().replace(/\.[^.]+$/,'').trim().toLowerCase()}
+function highlightStats(html,marks,cls){
+  const known=new Set((marks||[]).filter(Boolean));
+  const NUM='(?:\\d[\\d,]*(?:\\.\\d+)?|\\.\\d+)';
+  const re=new RegExp('[~≈+\\-−]?'+NUM+'(?:\\s*[–—-]\\s*'+NUM+')?%?','g');
+  return html.replace(/(<[^>]*>)|([^<]+)/g,(whole,tag,text)=>{
+    if(tag)return tag;
+    return text.replace(re,(m,offset,full)=>{
+      const before=full[offset-1],after=full[offset+m.length];
+      if(before&&/[\w.]/.test(before))return m;
+      if(after&&/\w/.test(after))return m;
+      const core=m.replace(/^[~≈+\-−]/,'');
+      const norm=core.replace(/%$/,'');
+      if(known.has(core)||known.has(norm)||known.has(norm.replace(/,/g,'')))return `<span class="${cls}">${m}</span>`;
+      const digits=norm.replace(/[,–—-]/g,'').replace('.','');
+      const statLike=core.indexOf('.')>=0||core.indexOf('%')>=0||core.indexOf(',')>=0||digits.length>=3;
+      return statLike?`<span class="v-extra">${m}</span>`:m;
+    });
+  });
+}
 function md(source){
   if(!source)return '';
   const e=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  const inline=t=>{t=e(t);t=t.replace(/!\[([^\]]*)\]\([^)]*\)/g,'<span class="mut">[figure: $1]</span>');t=t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noreferrer">$1</a>');t=t.replace(/\[([^\]]+)\]\([^)]*\)/g,'$1');t=t.replace(/`([^`]+)`/g,'<code>$1</code>');t=t.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');t=t.replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>');return t};
+  const inline=t=>{t=e(t);t=t.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g,(m,alt,src)=>`<a class="figref" data-fig="${figStem(src)}">[figure: ${alt||figStem(src)}]</a>`);t=t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noreferrer">$1</a>');t=t.replace(/\[([^\]]+)\]\([^)]*\)/g,'$1');t=t.replace(/`([^`]+)`/g,(m,p1)=>/fig|chart|plot|table/i.test(p1)?`<a class="figref" data-fig="${figStem(p1)}">${p1}</a>`:`<code>${p1}</code>`);t=t.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');t=t.replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>');return t};
   const rows=String(source).replace(/\r\n?/g,'\n').split('\n');let html='',i=0,ul=false,ol=false;
   const close=()=>{if(ul){html+='</ul>';ul=false}if(ol){html+='</ol>';ol=false}};
   while(i<rows.length){let line=rows[i];
@@ -37,10 +57,13 @@ function md(source){
 async function busy(button,label,work){const prior=button.textContent;button.disabled=true;button.textContent=label;try{return await work()}finally{button.disabled=false;button.textContent=prior}}
 
 function applyData(data){DATA=data;document.getElementById('project-name').textContent=DATA.project;document.getElementById('project-root').textContent=DATA.root}
-async function refresh(){applyData(await api('/api/bootstrap'));render()}
+async function refresh(){applyData(await api('/api/bootstrap'));applyHashView();render()}
 function render(){({dashboard:renderDashboard,setup:renderSetup,convert:renderConvert,build:renderBuild,prompts:renderPrompts,runs:renderRuns,review:renderReview,origin:renderOrigin,projects:renderProjects}[VIEW]||renderDashboard)()}
-function activateView(view){VIEW=view;document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===view));render()}
+function knownViews(){return Array.from(document.querySelectorAll('nav button')).map(button=>button.dataset.view)}
+function applyHashView(){const target=location.hash.slice(1);VIEW=knownViews().includes(target)?target:'dashboard';document.querySelectorAll('nav button').forEach(button=>button.classList.toggle('active',button.dataset.view===VIEW))}
+function activateView(view){VIEW=view;document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===view));history.replaceState(null,'','#'+view);render()}
 document.querySelectorAll('nav button').forEach(button=>button.addEventListener('click',()=>activateView(button.dataset.view)));
+window.addEventListener('hashchange',()=>{if(location.hash.slice(1)!==VIEW){applyHashView();render()}});
 
 function renderProjects(){
   const workspace=DATA.workspace||{enabled:false,projects:[]};
@@ -195,22 +218,23 @@ async function loadReviewQuestion(question){
   selectedQuestion=question;
   document.querySelectorAll('[data-rq]').forEach(button=>button.classList.toggle('active',Number(button.dataset.rq)===question));
   const run=selectedRun;const result=await api('/api/compare',{run,question});
-  const ORIGIN_COLOR='#e3b341';
-  const stageColor=(DATA.stages.find(stage=>stage.id===(result.run&&result.run.stage))||{}).color||'#6ea8fe';
-  const figures=items=>(items||[]).map(item=>`<figure><img src="${item.data_url}" alt="${esc(item.name)}"><figcaption class="mut">${esc(item.name)}</figcaption></figure>`).join('')||'<div class="empty">No figures.</div>';
+  const originClass='v-origin';
+  const valClass='v-stage-'+stageIndex(result.run&&result.run.stage);
+  const figures=items=>(items||[]).map(item=>`<figure id="fig-${figStem(item.name)}"><img src="${item.data_url}" alt="${esc(item.name)}"><figcaption class="mut">${esc(item.name)}</figcaption></figure>`).join('')||'<div class="empty">No figures.</div>';
   const legend=(result.legend||[]).map(verdict=>`<option value="${esc(verdict)}"${result.verdict===verdict?' selected':''}>${esc(verdict)}</option>`).join('');
   const stageNote=result.expect_exact?banner('warn','Replication stage — the validator should reproduce the origin’s statistics, so treat any “— not reported” as a discrepancy to check.'):banner('ok','Robustness stage — the validator chose its own method, so different or missing statistics can be legitimate. Lean on the narratives.');
-  const originCell=stat=>stat.in_origin?`<code style="color:${ORIGIN_COLOR}">${esc(stat.origin_value)}</code>${stat.origin_context?`<div class="mut ctx">${esc(stat.origin_context)}</div>`:''}`:'<span class="mut">— not reported</span>';
-  const statRows=(result.stats||[]).map(stat=>`<tr><td>${esc(stat.label)}</td><td>${originCell(stat)}</td><td><code style="color:${stageColor}">${esc(stat.value)}</code></td></tr>`).join('');
+  const originCell=stat=>stat.in_origin?`<code class="${originClass}">${esc(stat.origin_value)}</code>${stat.origin_context?`<div class="mut ctx">${esc(stat.origin_context)}</div>`:''}`:'<span class="mut">— not reported</span>';
+  const statRows=(result.stats||[]).map(stat=>`<tr><td>${esc(stat.label)}</td><td><code class="${valClass}">${esc(stat.value)}</code></td><td>${originCell(stat)}</td></tr>`).join('');
   const statsCaption='<p class="mut">The origin value is the validator’s number located in the origin’s text for this question (in the origin’s own representation — e.g. a percentage), with the surrounding snippet. “— not reported” means that exact number isn’t in the origin.</p>';
-  const statsBody=result.has_validator_stats?`${statsCaption}<table><thead><tr><th>Statistic</th><th style="color:${ORIGIN_COLOR}">Origin value</th><th style="color:${stageColor}">Validator value</th></tr></thead><tbody>${statRows}</tbody></table>`:`<div class="empty">No machine-readable Q${result.question.new}_summary.json from this validator — compare via the narratives below.</div>`;
-  const onlyRows=(result.origin_only||[]).map(item=>`<tr><td><code style="color:${ORIGIN_COLOR}">${esc(item.value)}</code></td><td class="mut">${esc(item.context)}</td></tr>`).join('');
+  const statsBody=result.has_validator_stats?`${statsCaption}<table><thead><tr><th>Statistic</th><th class="${valClass}">Validator value</th><th class="${originClass}">Origin value</th></tr></thead><tbody>${statRows}</tbody></table>`:`<div class="empty">No machine-readable Q${result.question.new}_summary.json from this validator — compare via the narratives below.</div>`;
+  const onlyRows=(result.origin_only||[]).map(item=>`<tr><td><code class="${originClass}">${esc(item.value)}</code></td><td class="mut">${esc(item.context)}</td></tr>`).join('');
   const onlyBody=onlyRows?`<p class="mut">Numbers in the origin’s material for this question that don’t match any value the validator reported — the origin may have measured more.</p><table><thead><tr><th>Origin value</th><th>Context</th></tr></thead><tbody>${onlyRows}</tbody></table>`:'<div class="empty">None — every origin figure for this question matched a validator value.</div>';
-  const narrative=(title,source,text,color)=>`<section><h4 style="color:${color}">${esc(title)}${source?` <span class="mut">· ${esc(source)}</span>`:''}</h4>${text&&text.trim()?`<div class="md">${md(text)}</div>`:'<div class="empty">No report section for this question.</div>'}</section>`;
-  const figSection=(label,color,items)=>`<section><h4 style="color:${color}">${esc(label)}</h4><div class="figs">${figures(items)}</div></section>`;
+  const narrative=(title,source,text,cls,marks)=>`<section><h4 class="${cls}">${esc(title)}${source?` <span class="mut">· ${esc(source)}</span>`:''}</h4>${text&&text.trim()?`<div class="md">${highlightStats(md(text),marks,cls)}</div>`:'<div class="empty">No report section for this question.</div>'}</section>`;
+  const figSection=(label,cls,items)=>`<section><h4 class="${cls}">${esc(label)}</h4><div class="figs">${figures(items)}</div></section>`;
   const sec=(title,body)=>`<details class="turn" open><summary>${title}</summary><div class="turn-body">${body}</div></details>`;
   const onlyCount=result.origin_only&&result.origin_only.length?` (${result.origin_only.length})`:'';
-  document.getElementById('review-q').innerHTML=`<h3>Q${result.question.new} — ${esc(result.question.topic)} ${result.confirmed?'<span class="pill ok">confirmed</span>':'<span class="pill">unconfirmed</span>'}</h3>${stageNote}${sec('Reported statistics — origin vs validator',statsBody)}${sec('Origin-only figures'+onlyCount,onlyBody)}${sec('Full reports',`<div class="grade-cols two">${narrative('Origin',result.origin_narrative_source,result.origin_narrative,ORIGIN_COLOR)}${narrative('Validator',result.validator_narrative_source,result.validator_narrative,stageColor)}</div>`)}${sec('Figures',`<div class="grade-cols two">${figSection('Origin',ORIGIN_COLOR,result.original)}${figSection('Validator',stageColor,result.validator)}</div>`)}${sec('Verdict',`<div class="field"><label>Verdict</label><select id="review-verdict"><option value="">— select —</option>${legend}</select></div><label>Grader note</label><textarea id="review-note">${esc(result.note||'')}</textarea><div class="actions"><button class="btn primary" id="review-confirm">Confirm verdict</button><button class="btn" id="review-clear">Clear</button></div>`)}`;
+  document.getElementById('review-q').innerHTML=`<h3>Q${result.question.new} — ${esc(result.question.topic)} ${result.confirmed?'<span class="pill ok">confirmed</span>':'<span class="pill">unconfirmed</span>'}</h3>${stageNote}${sec('Reported statistics — origin vs validator',statsBody)}${sec('Origin-only figures'+onlyCount,onlyBody)}${sec('Full reports',`<div class="grade-cols two">${narrative('Origin',result.origin_narrative_source,result.origin_narrative,originClass,result.origin_highlights)}${narrative('Validator',result.validator_narrative_source,result.validator_narrative,valClass,result.validator_highlights)}</div>`)}${sec('Figures',`<div class="grade-cols two">${figSection('Origin',originClass,result.original)}${figSection('Validator',valClass,result.validator)}</div>`)}${sec('Verdict',`<div class="field"><label>Verdict</label><select id="review-verdict"><option value="">— select —</option>${legend}</select></div><label>Grader note</label><textarea id="review-note">${esc(result.note||'')}</textarea><div class="actions"><button class="btn primary" id="review-confirm">Confirm verdict</button><button class="btn" id="review-clear">Clear</button></div>`)}`;
+  document.querySelectorAll('#review-q [data-fig]').forEach(link=>link.onclick=()=>{const target=document.getElementById('fig-'+link.dataset.fig);if(target){target.scrollIntoView({behavior:'smooth',block:'center'});target.classList.add('flash');setTimeout(()=>target.classList.remove('flash'),1300)}else{toast('No matching figure is shown for this question',true)}});
   document.getElementById('review-confirm').onclick=event=>busy(event.currentTarget,'Saving…',async()=>{const verdict=value('review-verdict');if(!verdict){toast('Pick a verdict first',true);return}await post('/api/grading/verdict',{run,question,verdict,note:value('review-note'),confirmed:true});toast('Verdict confirmed');loadReviewRun(run)}).catch(error=>toast(error.message,true));
   document.getElementById('review-clear').onclick=event=>busy(event.currentTarget,'Clearing…',async()=>{await post('/api/grading/verdict',{run,question,verdict:'',note:'',confirmed:false});toast('Verdict cleared');loadReviewRun(run)}).catch(error=>toast(error.message,true));
 }

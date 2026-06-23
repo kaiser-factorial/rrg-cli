@@ -43,9 +43,10 @@ def _number_forms(number: float) -> list[str]:
     for decimals in (0, 1, 2, 3, 4):
         forms.add(f"{number:.{decimals}f}")
         forms.add(f"{number:,.{decimals}f}")
-    percent = number * 100
-    for decimals in (0, 1, 2):
-        forms.add(f"{percent:.{decimals}f}")
+    if abs(number) <= 1.5:  # percentage forms only make sense for proportions
+        percent = number * 100
+        for decimals in (0, 1, 2):
+            forms.add(f"{percent:.{decimals}f}")
     # Drop forms that are too short to be meaningful on their own (e.g. "0").
     return sorted((form for form in forms if len(form.lstrip("-")) >= 2), key=len, reverse=True)
 
@@ -198,6 +199,12 @@ def question_extraction(
         except RRGError:
             expect_exact = False
 
+    extra = origin_only(origin_text, values)
+    validator_highlights = _highlight_forms(values)
+    origin_marks: set[str] = {row["origin_value"] for row in stats if row["origin_value"]}
+    origin_marks.update(item["value"].rstrip("%") for item in extra)
+    origin_highlights = sorted((mark for mark in origin_marks if len(mark) >= 2), key=len, reverse=True)
+
     deliverable = project.study.get("deliverable", {}) or {}
     report_template = str(deliverable.get("report_name", ""))
     report_name = report_template.replace("{MODEL}", "").replace("{model}", "").strip("_ ") if report_template else ""
@@ -208,10 +215,24 @@ def question_extraction(
         "stats": stats,
         "stats_source": json_name,
         "has_validator_stats": payload is not None,
-        "origin_only": origin_only(origin_text, values),
+        "origin_only": extra,
         "expect_exact": expect_exact,
+        "validator_highlights": validator_highlights,
+        "origin_highlights": origin_highlights,
         "origin_narrative": origin_narrative,
         "origin_narrative_source": origin_source,
         "validator_narrative": validator_narrative,
         "validator_narrative_source": validator_source,
     }
+
+
+def _highlight_forms(values: list[Any]) -> list[str]:
+    forms: set[str] = set()
+    for value in values:
+        try:
+            forms.update(_number_forms(float(value)))
+        except (TypeError, ValueError):
+            text = str(value).strip()
+            if len(text) >= 3:
+                forms.add(text)
+    return sorted((form for form in forms if len(form) >= 2), key=len, reverse=True)
