@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from . import extract as extract_module
+from . import figures as figures_module
 from . import grading as grading_module
 from . import importer as importer_module
 from . import origin as origin_module
@@ -313,11 +314,24 @@ class GUIState:
         extraction = extract_module.question_extraction(
             self.project, run_value, question_number, question["original"], stage=run["stage"]
         )
+        question_file = self.project.path(self.project.study.get("questions", {}).get("file", "shared/QUESTIONS.md"))
+        question_texts = (
+            origin_module.parse_numbered(question_file.read_text(encoding="utf-8", errors="ignore"))
+            if question_file.is_file()
+            else {}
+        )
+        origin_query = f"{question['topic']} {question_texts.get(question_number, '')}"
         return {
             "run": run,
             "question": question,
-            "validator": encoded(self._figure_matches(run_root, question_number), run_root),
-            "original": encoded(self._figure_matches(key_root, question["original"]), key_root),
+            "validator": figures_module.resolve_figures(run_root, question_number, extraction.get("validator_narrative", "")),
+            "original": figures_module.resolve_figures(
+                key_root,
+                question["original"],
+                extraction.get("origin_narrative", ""),
+                report_path=origin_module._find_report(self.project, key_root),
+                match_text=origin_query,
+            ),
             "verdict": verdict_entry.get("verdict", ""),
             "note": verdict_entry.get("note", ""),
             "confirmed": bool(verdict_entry.get("confirmed")),

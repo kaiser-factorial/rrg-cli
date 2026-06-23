@@ -40,14 +40,19 @@ study:
   deliverable:
     report_name: "{MODEL}_Report.md"
     reporting_spec: >-
-      For each question, deliver a reproducible artifact chain: `Q<n>_analysis.py`
-      runs the analysis and writes `raw/Q<n>_raw.csv`; `Q<n>_fig.py` reads that and
-      writes `Q<n>_fig.png`. Also record `raw/Q<n>_summary.json` (machine-readable:
-      analysis N, descriptive inputs, point estimate, uncertainty, effect size where
-      applicable, and a one-sentence conclusion). Write the report in DYFA format: one
-      section per question, labelled `D - Do` (what you ran), `Y - Why`, `F - Find`
-      (the result), and `A - Answer`, embedding the matching `Q<n>_fig.png`. Provide
-      `RAW.md` and `SUMMARY.md` indexing the per-question artifacts.
+      Produce the same deliverables for every question, identically, so the outputs are
+      directly comparable. For each question n: (1) an analysis script `Q<n>_analysis.py`
+      that writes its raw outputs to `raw/Q<n>_raw.csv`; (2) a figure script `Q<n>_fig.py`
+      that reads that CSV and writes `Q<n>_fig.png` — use that exact filename; (3) a
+      machine-readable `raw/Q<n>_summary.json`, a single flat JSON object that always
+      includes the keys `question`, `n` (analysis N), `test` (method name), `statistic`,
+      `p_value` (the exact value, never a rounded 0), `effect_size` (null if not
+      applicable), and `conclusion` (one sentence) — add extra keys as the question
+      needs; (4) a report section in DYFA format labelled `D - Do`, `Y - Why`, `F - Find`,
+      `A - Answer`, embedding `Q<n>_fig.png`. Also write `RAW.md` and `SUMMARY.md`
+      indexing the per-question artifacts. Before finishing, confirm every question has
+      all four — script+csv, fig+png, summary.json, and a DYFA section — and that no
+      `raw/Q<n>_summary.json` is missing.
     method_guide:
       enabled: false
       name: ""
