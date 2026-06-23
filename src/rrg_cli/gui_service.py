@@ -339,6 +339,72 @@ class GUIState:
             **extraction,
         }
 
+    @staticmethod
+    def _headline_stat(stats: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Pick the one stat to surface in the overview grid. Prefer the top-level
+        p-value, then a nested p, then the first reported value."""
+
+        def rank(label: str) -> int:
+            lowered = label.lower()
+            if lowered == "p_value":
+                return 0
+            if lowered.endswith(".p_value") or lowered.endswith("_p_value"):
+                return 1
+            if lowered == "p" or lowered.endswith(".p") or lowered.endswith("_p"):
+                return 2
+            if "p_value" in lowered:
+                return 3
+            if lowered.startswith("p_") or "_p_" in lowered:
+                return 4
+            return 99
+
+        ranked = sorted(((rank(stat["label"]), index, stat) for index, stat in enumerate(stats)))
+        if ranked and ranked[0][0] < 99:
+            return ranked[0][2]
+        return stats[0] if stats else None
+
+    def cross_run_overview(self) -> dict[str, Any]:
+        """A question x run snapshot: each cell shows a run's headline statistic for
+        that question and whether it was found in the origin. Cells link back to the
+        per-question side-by-side. The origin column shows the origin's own rendering
+        of the headline value wherever a run corroborated it."""
+        questions = self.questions()
+        returned = [run for run in self.runs() if run["returned"]]
+        run_cols = [{"path": run["path"], "model": run["model"], "stage": run["stage"]} for run in returned]
+        rows: list[dict[str, Any]] = []
+        for question in questions:
+            cells: list[dict[str, Any]] = []
+            origin_value = ""
+            for run in returned:
+                extraction = extract_module.question_extraction(
+                    self.project, run["path"], question["new"], question["original"], stage=run["stage"]
+                )
+                stat = self._headline_stat(extraction.get("stats", []))
+                cell = {
+                    "run": run["path"],
+                    "has_stats": bool(extraction.get("has_validator_stats")),
+                    "label": stat["label"] if stat else "",
+                    "value": stat["value"] if stat else "",
+                    "in_origin": bool(stat["in_origin"]) if stat else False,
+                    "origin_value": stat["origin_value"] if stat else "",
+                }
+                if cell["in_origin"] and cell["origin_value"] and not origin_value:
+                    origin_value = cell["origin_value"]
+                cells.append(cell)
+            matched = sum(1 for cell in cells if cell["in_origin"])
+            with_stats = sum(1 for cell in cells if cell["has_stats"])
+            rows.append(
+                {
+                    "new": question["new"],
+                    "original": question["original"],
+                    "topic": question["topic"],
+                    "origin_value": origin_value,
+                    "cells": cells,
+                    "agreement": f"{matched}/{with_stats}" if with_stats else "—",
+                }
+            )
+        return {"questions": [{"new": q["new"], "topic": q["topic"]} for q in questions], "runs": run_cols, "rows": rows}
+
     def _notes_path(self, run_value: str) -> Path:
         root = self.project.path_setting("compare_notes", "operator/_compare_notes")
         digest = hashlib.sha256(run_value.encode()).hexdigest()[:12]
@@ -388,6 +454,13 @@ class GUIState:
     def save_methodology(self, text: str) -> dict[str, Any]:
         with self._lock:
             return origin_module.save_methodology(self.project, text)
+
+    def intake_prompt(self) -> dict[str, Any]:
+        return origin_module.intake_prompt(self.project)
+
+    def save_intake(self, text: str) -> dict[str, Any]:
+        with self._lock:
+            return origin_module.save_intake(self.project, text)
 
     def render(self, stage: str, model: str, mode: str) -> dict[str, Any]:
         prompt = render_prompt(self.project, stage, model, mode=mode)

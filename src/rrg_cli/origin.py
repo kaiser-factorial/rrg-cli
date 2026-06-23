@@ -11,15 +11,20 @@ so a question marked "scoreable" here is one the scorecard can actually extract.
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from .errors import RRGError
 from .project import Project
 from .prompts import modules, placeholders, render_text
 from .scorecard import _markdown_section, load_question_map
+from .utils import dump_yaml
 
 REPORT_CAP_BYTES = 12 * 1024 * 1024
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 SUMMARY_NAMES = ("SUMMARY.md", "INVESTIGATION_SUMMARY.md", "RAW.md")
 
 # Heuristics that flag results leaking into a methods-only protocol.
@@ -270,6 +275,178 @@ def save_methodology(project: Project, text: str) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Origin intake: normalize the origin report into the canonical SUMMARY + figures
+# ---------------------------------------------------------------------------
+
+_FENCE_RE = re.compile(r"```+\s*ya?ml\b(.*?)```+", re.DOTALL | re.IGNORECASE)
+_MANIFEST_TAIL_RE = re.compile(r"\n#{1,6}\s*\d*\.?\s*figure manifest.*$", re.IGNORECASE | re.DOTALL)
+_INTAKE_REQUIRED = ("test", "statistic", "p_value", "conclusion")
+
+
+def _summary_path(project: Project) -> Path:
+    explicit = project.study.get("original", {}).get("summary_file")
+    if explicit:
+        return project.path(explicit)
+    return _origin_dir(project) / "SUMMARY.md"
+
+
+def _intake_questions_list(project: Project) -> str:
+    """Questions keyed by the report's ORIGINAL numbering — the origin SUMMARY is
+    consumed by original number, so the model must section by it."""
+    map_path = project.path(project.study.get("questions", {}).get("map", "questions_map.yaml"))
+    questions = load_question_map(map_path) if map_path.is_file() else []
+    questions_path = project.path(project.study.get("questions", {}).get("file", "shared/QUESTIONS.md"))
+    by_new = parse_numbered(_read(questions_path))
+    if not questions:
+        return _read(questions_path).strip()
+    lines = [
+        f"{entry['original']}. {by_new.get(entry['new'], entry.get('topic', '')).strip()}"
+        for entry in sorted(questions, key=lambda item: item["original"])
+    ]
+    return "\n".join(lines)
+
+
+def _intake_prompt_template(project: Project) -> tuple[str, str]:
+    value = project.study.get("original", {}).get("intake_prompt", "prompts/origin_intake.md")
+    path = project.path(value)
+    if path.is_file():
+        return path.read_text(encoding="utf-8"), str(path.relative_to(project.root))
+    return DEFAULT_INTAKE_PROMPT, "(built-in default)"
+
+
+def intake_prompt(project: Project) -> dict[str, Any]:
+    stage = (project.stage_ids() or ["replication"])[0]
+    values = placeholders(project, stage, "Origin-Model")
+    origin_dir = _origin_dir(project)
+    report_path = _find_report(project, origin_dir)
+    summary_path = _summary_path(project)
+    values["ORIGIN_REPORT"] = report_path.name if report_path else "(attach the origin report)"
+    values["STUDY_TITLE"] = str(project.study.get("title", project.name))
+    values["QUESTIONS_LIST"] = _intake_questions_list(project) or "(see {QUESTIONS_FILE})"
+    values["SUMMARY_FILE"] = summary_path.name
+    template, source = _intake_prompt_template(project)
+    rendered = render_text(template, values, modules(project.study))
+    return {
+        "text": rendered,
+        "source": source,
+        "target": str(summary_path.relative_to(project.root)) if _inside(project.root, summary_path) else str(summary_path),
+        "origin_report": values["ORIGIN_REPORT"],
+    }
+
+
+def split_intake(text: str) -> tuple[str, str]:
+    """Split a returned intake into (summary_markdown, figure_map_yaml). The model
+    returns the SUMMARY markdown followed by a fenced ```yaml figure_map block."""
+    match = _FENCE_RE.search(text)
+    if not match:
+        return _MANIFEST_TAIL_RE.sub("", text).strip(), ""
+    summary = _MANIFEST_TAIL_RE.sub("", text[: match.start()]).strip()
+    return summary, match.group(1).strip()
+
+
+def _normalize_label(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value).lower())
+
+
+def _apply_figure_map(origin_dir: Path, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    images = (
+        [path for path in sorted(origin_dir.rglob("*")) if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS]
+        if origin_dir.is_dir()
+        else []
+    )
+    results: list[dict[str, Any]] = []
+    for entry in entries:
+        question = entry.get("question")
+        label = str(entry.get("report_label", "")).strip()
+        canonical = str(entry.get("canonical") or (f"Q{question}_fig.png" if question else "")).strip()
+        record = {"question": question, "report_label": label, "canonical": canonical, "status": "", "source": ""}
+        if not canonical:
+            record["status"] = "skipped: no canonical name"
+            results.append(record)
+            continue
+        target = origin_dir / Path(canonical).name
+        if target.exists():
+            record["status"] = "exists"
+            record["source"] = target.name
+            results.append(record)
+            continue
+        key = _normalize_label(label)
+        matches = [
+            path
+            for path in images
+            if path.name != target.name and key and (_normalize_label(path.stem) == key or key in _normalize_label(path.stem))
+        ]
+        if len(matches) == 1:
+            origin_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(matches[0], target)
+            record["status"] = "renamed"
+            record["source"] = str(matches[0].relative_to(origin_dir))
+        elif not matches:
+            record["status"] = "no source file (figure may live in the PDF)"
+        else:
+            record["status"] = f"ambiguous ({len(matches)} candidates) — left for manual rename"
+        results.append(record)
+    return results
+
+
+def intake_warnings(summary: str, project: Project) -> list[dict[str, Any]]:
+    """Presence check, mirror-image of the methodology leak linter: here we WANT the
+    numbers, so flag any question section missing a required field."""
+    map_path = project.path(project.study.get("questions", {}).get("map", "questions_map.yaml"))
+    questions = load_question_map(map_path) if map_path.is_file() else []
+    warnings: list[dict[str, Any]] = []
+    for entry in questions:
+        section = _markdown_section(summary, entry["original"])
+        if not section.strip():
+            warnings.append({"question": entry["original"], "reason": "missing section", "text": f"no ## Q{entry['original']} block found"})
+            continue
+        lowered = section.lower()
+        missing = [field for field in _INTAKE_REQUIRED if field not in lowered]
+        if missing:
+            warnings.append({"question": entry["original"], "reason": "missing fields", "text": ", ".join(missing)})
+    return warnings
+
+
+def save_intake(project: Project, text: str) -> dict[str, Any]:
+    if not text.strip():
+        raise RRGError("intake text is empty")
+    summary, yaml_text = split_intake(text)
+    if not summary:
+        raise RRGError("no SUMMARY content found before the figure_map block")
+    summary_path = _summary_path(project)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(summary if summary.endswith("\n") else summary + "\n", encoding="utf-8")
+
+    entries: list[dict[str, Any]] = []
+    if yaml_text:
+        try:
+            parsed = yaml.safe_load(yaml_text)
+        except yaml.YAMLError:
+            parsed = None
+        if isinstance(parsed, dict):
+            entries = [item for item in (parsed.get("figure_map") or []) if isinstance(item, dict)]
+        elif isinstance(parsed, list):
+            entries = [item for item in parsed if isinstance(item, dict)]
+
+    origin_dir = _origin_dir(project)
+    figure_results = _apply_figure_map(origin_dir, entries) if entries else []
+    figure_map_written = ""
+    if entries:
+        origin_dir.mkdir(parents=True, exist_ok=True)
+        map_path = origin_dir / "figure_map.yaml"
+        map_path.write_text(dump_yaml({"figure_map": entries}), encoding="utf-8")
+        figure_map_written = (
+            str(map_path.relative_to(project.root)) if _inside(project.root, map_path) else str(map_path)
+        )
+    return {
+        "summary_written": str(summary_path.relative_to(project.root)) if _inside(project.root, summary_path) else str(summary_path),
+        "figure_map_written": figure_map_written,
+        "figures": figure_results,
+        "warnings": intake_warnings(summary, project),
+    }
+
+
 DEFAULT_METHODOLOGY_PROMPT = """# Methodology reconstruction — {STUDY_TITLE}
 
 You are acting as the origin author for this study. You are given the original
@@ -297,4 +474,62 @@ follow to reproduce the analysis without ever seeing the findings.
   this is a result-free reconstruction revealed only in replication.
 
 Return only the protocol document, nothing else.
+"""
+
+
+DEFAULT_INTAKE_PROMPT = """# Origin intake — {STUDY_TITLE}
+
+You are acting as the origin author for this study. You are given the original report
+`{ORIGIN_REPORT}` and the {N_QUESTIONS} validation questions below. Produce a
+**faithful, structured transcription** of what the report already says for each
+question, in the canonical format the grading pipeline consumes. You are normalizing
+an existing report — you are NOT re-running, re-computing, or correcting anything.
+
+## Validation questions
+
+{QUESTIONS_LIST}
+
+## What to produce
+
+Two things, in this order, in a single response:
+
+### 1. `{SUMMARY_FILE}` — one fixed block per question
+
+Output GitHub-flavored markdown. Write exactly one section per question, in order,
+each headed `## Q<n> - <topic>`, where `<n>` is the question number exactly as shown
+in the list above (this is the report's own numbering). Under each heading, give a
+fixed field list whose keys mirror the validator deliverable schema:
+
+- **question** — the question text, verbatim from the list above.
+- **n** — the analysis N the report used for this question.
+- **groups** — how cases were split or grouped (definitions only).
+- **test** — the exact test and its alternative/direction.
+- **statistic** — the reported test statistic with its label.
+- **p_value** — the reported p, exactly as printed. Never round a small p to 0. If the
+  report states two conflicting p-values, record BOTH and do not reconcile them.
+- **effect_size** — the reported effect size, or `null` if none.
+- **multiplicity** — how multiple comparisons were treated, or `null`.
+- **conclusion** — the report's own one-sentence conclusion.
+
+Copy numbers exactly as the report renders them. Transcribe; do not recompute. If a
+field is genuinely absent, write `not reported` — do not infer.
+
+### 2. Figure manifest
+
+After the summary, output a fenced ```yaml block named `figure_map` mapping each
+question to the figure(s) in `{ORIGIN_REPORT}` that answer it, identified by the
+report's OWN figure label, so the operator can rename them to `Q<n>_fig.png`:
+
+```yaml
+figure_map:
+  - {question: 1, report_label: "Figure 1", canonical: "Q1_fig.png"}
+```
+
+Match figures to questions by content, not position. If unsure, omit that row.
+
+## Rules
+
+- This is a transcription task. Do not analyze, run code, or "fix" the report.
+- Honor the held constants in `{HELD_CONSTANTS_FILE}` ({HELD_CONSTANTS_SUMMARY}).
+- Output only the two artifacts above. No preamble, no commentary.
 """

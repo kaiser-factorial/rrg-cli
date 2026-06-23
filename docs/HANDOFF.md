@@ -1,7 +1,7 @@
 # HANDOFF — RRG
 
 *Continuity brief for a future session. Read this, then `SPEC.md` (full spec) and
-`docs/adr/0001-validator-isolation.md`. Last updated 2026-06-23.*
+`docs/adr/0001-validator-isolation.md`. Last updated 2026-06-23 (pm session).*
 
 ---
 
@@ -13,6 +13,9 @@ Everything is now under **`rrg-cli/`** (its own git repo → `kaiser-factorial/r
   file, `SPEC.md` lives at the repo root, ADRs in `docs/adr/`.
 - `examples/MovieRatings/` — committed, runnable demo project.
 - `.venv/` — the project venv (gitignored). Use Python 3.13 (3.14's `ensurepip` is broken).
+  Note: the venv's `python`/`python3` symlinks point at a broken `python3.14`; `rrg` and
+  `pip` work because their shebangs hardcode `python3.13`, but a bare `.venv/bin/python`
+  fails — repoint those two symlinks to `python3.13` when convenient.
 - `workspace/` — **gitignored**; the live GUI workspace holding the real studies:
   - `LoveSmarter/` — the real study (consolidated: `rrg.yaml`, `study.yaml`, `prompts/`,
     `data/`, `operator/`, `shared/` all in one self-contained project).
@@ -39,13 +42,33 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
 - **Workspace mode** — `rrg gui --workspace DIR` confines one workspace, switches projects
   under a lock; Projects tab + new-project scaffolding.
 - **Origin tab** — per-question separation matrix (questions ↔ protocol ↔ origin key),
-  streamed PDF viewer of the origin report, and a result-free methodology-drafting prompt.
+  streamed PDF viewer of the origin report, a result-free methodology-drafting prompt, and
+  the **origin-intake** card (below).
+- **Origin intake** (`origin.py` + `rrg intake` + Origin-tab card) — normalizes the origin
+  report into the canonical artifacts the pipeline consumes. A flat prompt
+  (`prompts/origin_intake.md`, built-in default in `origin.py`) is handed to the *origin
+  model* with its report; it returns (1) a per-question `SUMMARY.md` whose fields mirror the
+  validator `Q<n>_summary.json` schema, **transcribe-not-recompute** (preserves quirks like
+  the Q7 p-value inconsistency), and (2) a fenced `figure_map` YAML. `save_intake` splits the
+  two, writes `SUMMARY.md`, copies matched figures to `Q<n>_fig.png` (conservative — only on
+  an unambiguous filename match; PDF-only figures reported, never destructive), writes
+  `figure_map.yaml`, and runs a presence linter (inverse of the methodology leak linter:
+  flags any Q section missing `test/statistic/p_value/conclusion`). **Sections are keyed by
+  ORIGINAL question number** (the SUMMARY is consumed by original #, unlike the protocol which
+  is new-numbered) — the prompt's question list is built from the map accordingly. CLI:
+  `rrg intake` renders the prompt; `rrg intake --apply FILE` applies a return.
 - **Per-stage model editor** (Setup) — model/vendor/type/license/dispatch-slug rows.
 - **Review & Grade tab** (replaces Compare + Scorecards) — per question: validator vs
   origin **stats** (validator-led, content-matched), **DYFA narratives**, **figures**, and
   a **verdict**. A run is *graded* only when a human confirms every question; finalizing
   writes a versioned `SCORECARD_*.md`. Narrative numbers are colored (origin amber /
   validator stage-color / red for untracked / figure refs italic + click-to-scroll).
+- **Cross-run overview** (Review & Grade, collapsible at top) — a questions × runs matrix;
+  each cell shows a run's **headline statistic** (`cross_run_overview` + `_headline_stat`:
+  top-level p-value, falling back to nested/`top_p`) with a green/red dot for whether that
+  value is found in the origin, plus an Origin reference column and a per-row agreement count.
+  Click any cell to jump to that run+question in the side-by-side. The side-by-side grading
+  view is unchanged. Endpoint `/api/overview`.
 - **Validator isolation** (ADR 0001) — packages ship as a self-contained zip; run the
   validator **outside the project**; `rrg import` brings results back (zip-slip-safe). Fixes
   a real breach where a validator `ls`-ed `../../../origin/`.
@@ -90,11 +113,20 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
 ## Open / next
 
 - **Validator-compliance**: the prompt is now strict + has a verify turn, but a model can
-  still drift. Decide whether to add an `rrg import`-time normalizer (parse the report's
-  table into `raw/Q<n>_summary.json`, standardize figure names).
+  still drift. The **origin** side is now handled by origin-intake (above); a *validator*-side
+  `rrg import`-time normalizer (parse a non-conforming report into `raw/Q<n>_summary.json`,
+  standardize figure names) is still open. Per discussion the plan is to lean on clean prompts
+  first and normalize as a fallback.
+- **Origin column in the overview is reference-only** until intake has been run for a study —
+  it shows the origin's value only where a validator corroborated it. After `rrg intake`
+  writes a structured `SUMMARY.md`, wire a label-aligned origin parse so the column is solid.
+- **Multi-validator DYFA view** (optional) — the Review side-by-side is origin vs *one*
+  validator. A view comparing several validators' DYFA narratives at once was discussed.
 - **Figure caption-matching is heuristic** — calibrate against a real LoveSmarter-style
   report (it nailed MovieRatings; reports whose captions don't restate the question match
-  less well). PDF figures live only in `ORIGIN_REPORT.pdf` for MovieRatings.
+  less well). PDF figures live only in `ORIGIN_REPORT.pdf` for MovieRatings. Origin-intake's
+  `figure_map` (origin model names the figure→question mapping) sidesteps this on the origin
+  side when figures exist as files.
 - **Observed in the test1 Review (screenshot 2026-06-23):** (a) origin **Figures** showed
   "No figures" — **RESOLVED**: root cause was missing **Pillow** (not pypdf); the resolver's
   broad `except` hid the `ImportError`. Fixed via `pypdf[image]` in `pyproject.toml` (see
@@ -110,6 +142,8 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
 
 ## Tests
 
-`cd rrg-cli && PYTHONPATH=src .venv/bin/python -m pytest -q` — green. `pyreadstat` must be
-installed for strict preflight (it's a dependency). Files: origin, grading, extract,
-figures, dispatch, scorecard_gui, packaging_blinding, converter, scaffold_doctor, cli.
+`cd rrg-cli && PYTHONPATH=src .venv/bin/python -m pytest -q` — green (58 tests). `pyreadstat`
+must be installed for strict preflight (it's a dependency). Files: origin, **intake** (new:
+split_intake / intake_prompt original-numbering / save_intake / cross_run_overview /
+headline-stat / intake+overview HTTP), grading, extract, figures, dispatch, scorecard_gui,
+packaging_blinding, converter, scaffold_doctor, cli.

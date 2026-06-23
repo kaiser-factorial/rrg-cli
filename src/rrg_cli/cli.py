@@ -123,6 +123,14 @@ def build_parser() -> argparse.ArgumentParser:
     scorecard.add_argument("--license", default="record-at-run-time")
     scorecard.add_argument("--json", action="store_true")
 
+    intake = sub.add_parser(
+        "intake",
+        help="render the origin-intake prompt, or apply a returned intake to write SUMMARY.md + rename figures",
+    )
+    _add_project_args(intake)
+    intake.add_argument("--apply", metavar="FILE", help="apply a returned intake file (writes SUMMARY.md, renames figures)")
+    intake.add_argument("--json", action="store_true")
+
     gui = sub.add_parser("gui", help="launch the local status GUI")
     _add_project_args(gui)
     gui.add_argument("--workspace", help="enable safe switching among projects below this directory")
@@ -221,6 +229,30 @@ def run(args: argparse.Namespace) -> int:
             license_name=args.license,
         )
         _emit(result, args.json)
+        return 0
+    if args.command == "intake":
+        from .origin import intake_prompt, save_intake
+
+        if args.apply:
+            text = project.path(args.apply).read_text(encoding="utf-8", errors="ignore")
+            result = save_intake(project, text)
+            if args.json:
+                _emit(result, True)
+            else:
+                lines = [f"Wrote {result['summary_written']}"]
+                if result["figure_map_written"]:
+                    lines.append(f"Wrote {result['figure_map_written']}")
+                for figure in result["figures"]:
+                    lines.append(f"  fig Q{figure['question']}: {figure['status']}")
+                for warning in result["warnings"]:
+                    lines.append(f"  ⚠ Q{warning['question']}: {warning['reason']} ({warning['text']})")
+                print("\n".join(lines))
+            return 0
+        rendered = intake_prompt(project)
+        if args.json:
+            _emit(rendered, True)
+        else:
+            print(rendered["text"])
         return 0
     if args.command == "gui":
         serve(project, args.port, open_browser=args.open)

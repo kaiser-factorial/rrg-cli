@@ -185,6 +185,15 @@ class WorkspaceState:
     def save_methodology(self, *args, **kwargs):
         return self._call("save_methodology", *args, **kwargs)
 
+    def intake_prompt(self):
+        return self._call("intake_prompt")
+
+    def save_intake(self, *args, **kwargs):
+        return self._call("save_intake", *args, **kwargs)
+
+    def cross_run_overview(self):
+        return self._call("cross_run_overview")
+
     def render(self, *args, **kwargs):
         return self._call("render", *args, **kwargs)
 

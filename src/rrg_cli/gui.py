@@ -130,6 +130,8 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     return self._json({"scorecards": state.scorecards()})
                 if path == "/api/grading":
                     return self._json(state.grading_overview(query.get("run", "")))
+                if path == "/api/overview":
+                    return self._json(state.cross_run_overview())
                 if path == "/api/scorecard":
                     return self._json(state.scorecard_content(query.get("path", "")))
                 if path == "/api/origin":
@@ -138,6 +140,8 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     return self._json(state.origin_report())
                 if path == "/api/origin/methodology_prompt":
                     return self._json(state.methodology_prompt())
+                if path == "/api/origin/intake_prompt":
+                    return self._json(state.intake_prompt())
                 return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             except RRGError as exc:
                 return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
@@ -184,6 +188,8 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     result = state.save_setup(payload)
                 elif path == "/api/origin/methodology":
                     result = {**state.save_methodology(str(payload.get("text", ""))), "origin": state.origin_overview()}
+                elif path == "/api/origin/intake":
+                    result = {**state.save_intake(str(payload.get("text", ""))), "origin": state.origin_overview()}
                 elif path == "/api/grading/verdict":
                     result = state.save_verdict(
                         str(payload.get("run", "")),
