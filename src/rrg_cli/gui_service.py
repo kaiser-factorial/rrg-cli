@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from . import extract as extract_module
 from . import grading as grading_module
 from . import origin as origin_module
 from .converter import convert_dataset
@@ -306,20 +307,21 @@ class GUIState:
                 )
             return output
 
-        material = grading_module.question_material(self.project, run_value, question_number, question["original"])
         grading_state = grading_module.load_grading(self.project, run_value)
         verdict_entry = grading_state["verdicts"].get(str(question_number), {})
+        extraction = extract_module.question_extraction(
+            self.project, run_value, question_number, question["original"], stage=run["stage"]
+        )
         return {
             "run": run,
             "question": question,
             "validator": encoded(self._figure_matches(run_root, question_number), run_root),
             "original": encoded(self._figure_matches(key_root, question["original"]), key_root),
-            "validator_text": material["validator_text"],
-            "original_text": material["origin_text"],
             "verdict": verdict_entry.get("verdict", ""),
             "note": verdict_entry.get("note", ""),
             "confirmed": bool(verdict_entry.get("confirmed")),
             "legend": grading_module.VERDICTS,
+            **extraction,
         }
 
     def _notes_path(self, run_value: str) -> Path:

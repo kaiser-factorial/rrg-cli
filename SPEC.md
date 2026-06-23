@@ -291,8 +291,11 @@ GUI runs in single-project mode and the workspace surface is disabled.
 and noting the prior one. For each question it lays the validator's material beside the
 held-back key material (pulled by the question's *original* number), with a **PENDING**
 verdict and a verdict legend (`REPRODUCED`, `CONVERGED`, `DIVERGED`, `INCOMPLETE`,
-`GENERALIZES`, `SAMPLE-SPECIFIC`, `N-A`). The scaffold is explicitly provisional and is
-rejected if it ever contains a final verdict — grading is a human act.
+`GENERALIZES`, `SAMPLE-SPECIFIC`, `N-A`). A blank scaffold is explicitly provisional and
+is rejected if it ever contains a final verdict — the engine never grades. When the
+operator finalizes a fully-graded run (Review & Grade), the same builder fills the table
+with the human-confirmed verdicts and writes the next version. Grading state lives
+separately as per-run JSON; a run is "graded" only when every question is confirmed.
 
 ---
 
@@ -309,11 +312,19 @@ A single-page app served locally. Tabs:
   from paste-ready turns; supports discussion vs. operator-reviewed-lock mode.
 - **Runs** — browse validator output folders (the results key and operator-only
   directories are excluded), with per-file preview.
-- **Compare** — validator vs. origin figures side by side per question, with
-  operator-only notes.
+- **Review & Grade** — the unified review-and-grading surface (replaces the older
+  Compare and Scorecards tabs). For a returned run, each question shows: a
+  validator-led **statistics comparison** (every stat the validator reported in
+  `raw/Q<n>_summary.json`, checked for the same value in the origin's per-question
+  material and marked found / not-found, with the stage's expectation noted —
+  replication should match exactly, robustness may legitimately differ), an
+  **origin-only figures** list (numbers the origin reported that the validator did
+  not), the full **DYFA narratives** side by side, the figures, and a **verdict**
+  control. A run is graded only when a human confirms a verdict for every question;
+  finalizing exports a versioned `SCORECARD_*.md` filled with those verdicts. Draft
+  scorecards can be deleted; finalized ones are protected until the run is reopened.
 - **Origin** — the separation matrix, content preview, report viewer, and methodology
   drafting (section 9).
-- **Scorecards** — generate and read provisional grading scaffolds.
 - **Projects** — workspace switcher and new-project scaffolding (workspace mode).
 - **Setup** — edit the cartridge and engine config, including a per-stage model editor
   (model, vendor, type, license, dispatch slug) and the dispatch start template.
@@ -322,12 +333,15 @@ A single-page app served locally. Tabs:
 ### 12.1 HTTP API
 
 `GET`: `/api/bootstrap`, `/api/workspace`, `/api/preflight`, `/api/prompt`,
-`/api/runs`, `/api/run`, `/api/file`, `/api/compare`, `/api/scorecards`,
+`/api/runs`, `/api/run`, `/api/file`, `/api/compare` (per-question figures, stats
+comparison, and narratives), `/api/grading` (per-run verdict state), `/api/scorecards`,
 `/api/scorecard`, `/api/origin`, `/api/origin/report`,
 `/api/origin/report.pdf` (PDF stream), `/api/origin/methodology_prompt`.
 
-`POST`: `/api/convert`, `/api/package`, `/api/scorecard`, `/api/note`, `/api/setup`,
-`/api/project/select`, `/api/project/create`, `/api/origin/methodology`.
+`POST`: `/api/convert`, `/api/package`, `/api/scorecard`, `/api/setup`,
+`/api/project/select`, `/api/project/create`, `/api/origin/methodology`,
+`/api/grading/verdict`, `/api/grading/finalize`, `/api/grading/reopen`,
+`/api/grading/delete`, `/api/scorecard/delete`.
 
 ---
 
