@@ -1,7 +1,9 @@
 # HANDOFF — RRG
 
-*Continuity brief for a future session. Read this, then `SPEC.md` (full spec) and
-`docs/adr/0001-validator-isolation.md`. Last updated 2026-06-23 (pm session).*
+*Continuity brief for a future session. Read this, then `SPEC.md` (full spec) and the ADRs:
+`docs/adr/0001-validator-isolation.md` (zip delivery + import) and
+`docs/adr/0002-roundtrip-run-identity-and-archival.md` (run_id, breach guard, archive —
+fully implemented this session). Last updated 2026-06-23 (evening session).*
 
 ---
 
@@ -21,6 +23,11 @@ Everything is now under **`rrg-cli/`** (its own git repo → `kaiser-factorial/r
     `data/`, `operator/`, `shared/` all in one self-contained project).
   - `MovieRatings/` — working copy of the demo.
   - `experiments/` — test-run transcripts (e.g. `gemini_test1_MovieRatings/`).
+
+**Operator-side layout (after ADR 0002):** run folders are now `operator/<stage>_<model>__<run_id>/`
+(re-runs accumulate, never clobber); `operator/_packages/provenance_log.jsonl` is the run registry
+(`rrg runs`); `operator/_archive/` + `index.jsonl` hold reversibly-deleted items; `operator/_grading/`
+holds grading state plus per-run `*.breach.json` records.
 
 `RRG_root/archive/RRG/` is the **old monorepo** (its own repo, history preserved). Its
 `docs/HANDOFF.md` has the deep LoveSmarter research history — the validation ladder,
@@ -53,6 +60,9 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
   Endpoints: `/api/tree`, `/api/tree/file`, `/api/archive[/restore|/purge]`,
   `/api/grading/acknowledge-breach`. NB: `make_handler` wraps state in `WorkspaceState`, so any
   new GUIState method must also be proxied in `workspace.py`.
+- **Guide tab** — an interactive 7-step timeline of the round-trip (Setup/Convert → Build →
+  Dispatch → Run isolated → Import → Breach check → Review & Grade), each step naming the GUI
+  tab and matching `rrg` command. Pure frontend (`renderGuide` in `app.js`), no backend.
 - **Workspace mode** — `rrg gui --workspace DIR` confines one workspace, switches projects
   under a lock; Projects tab + new-project scaffolding.
 - **Origin tab** — per-question separation matrix (questions ↔ protocol ↔ origin key),
@@ -123,14 +133,26 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
   is a recoverable cross-reference quirk in some PDFs (figures still extract). `serve()`
   installs a logging filter on `pypdf._reader` that drops *only* that message — every other
   pypdf warning, and all errors/exceptions, still surface.
+- **Every GUIState method needs a `WorkspaceState` proxy.** `make_handler` *always* wraps state
+  in `WorkspaceState` (even single-project, non-workspace mode), which forwards only an explicit
+  allow-list of methods via `self._call(...)`. A new GUIState method reachable over HTTP must get
+  a matching `def name(self, *a, **k): return self._call("name", *a, **k)` in `workspace.py`, or
+  the endpoint 500s with `'WorkspaceState' object has no attribute …`. Caught the slice C/D/E
+  endpoints this way.
+- **The `.venv/` holds Mac binaries — the Cowork Linux sandbox can't run them.** To run the suite
+  from the sandbox, use a sandbox Python with the deps installed:
+  `pip install pytest pyarrow pyreadstat pypdf Pillow --break-system-packages`, then
+  `PYTHONPATH=src python3 -m pytest`. Missing `pyarrow`/`pyreadstat` show up as parquet/preflight
+  `ImportError`s, not real failures. On the Mac, just use `.venv/bin/python` as usual.
 
 ## Open / next
 
 - **Validator-compliance**: the prompt is now strict + has a verify turn, but a model can
-  still drift. The **origin** side is now handled by origin-intake (above); a *validator*-side
+  still drift. The **origin** side is handled by origin-intake (above); a *validator*-side
   `rrg import`-time normalizer (parse a non-conforming report into `raw/Q<n>_summary.json`,
-  standardize figure names) is still open. Per discussion the plan is to lean on clean prompts
-  first and normalize as a fallback.
+  standardize figure names) is **still open** — note the ADR 0002 breach guard is a *different*
+  thing (it catches *copied* secrets, not non-conforming *formatting*). Plan: lean on clean
+  prompts first, normalize as a fallback.
 - **Origin column in the overview is reference-only** until intake has been run for a study —
   it shows the origin's value only where a validator corroborated it. After `rrg intake`
   writes a structured `SUMMARY.md`, wire a label-aligned origin parse so the column is solid.
@@ -148,19 +170,24 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
   Gemini test1 report isn't in DYFA `## Q<n>` sections, so `_markdown_section` finds nothing.
   Resolves on the rerun with the standardized DYFA prompt; for non-conforming reports, this
   is the case the import-time normalizer (above) would handle.
-- Minor: **DONE (2026-06-23)** — the three orphaned LoveSmarter prompts
-  (`STAGE1_REPLICATION_PROMPT.md`, `METHOD_FREE_PROMPT.md`, `CODEX_PROMPT.md`) were moved out
-  of `prompts/` to `operator/archive/retired_prompts/` (superseded by standardized
-  `replication.md`/`robustness.md`; zero references in code/config; historical provenance
-  logs still point at the old monorepo path and were intentionally left untouched). Still
-  optional: color stat *names* (`p`, `chi-square`) in narratives, not just values.
-- **Then actually run the pipeline** for LoveSmarter: build → dispatch zip → run isolated →
-  `rrg import` → Review & Grade → finalize scorecards.
+- **Optional UI polish** (deferred by choice for a future UI-design session): color stat
+  *names* (`p`, `chi-square`) in narratives, not just values. (The orphaned-prompt cleanup is
+  done — see the moved files in `workspace/LoveSmarter/operator/archive/retired_prompts/`.)
+- **The big next step: actually run the pipeline end-to-end for LoveSmarter** — now fully
+  unblocked by ADR 0002. Flow: build → `rrg runs` to confirm → move zip OUT of the project →
+  run validator isolated → zip results → `rrg import` (marker auto-resolves; breach guard runs)
+  → Review & Grade → finalize scorecards. Per the user, the existing pre-ADR-0002 LoveSmarter
+  runs will be **re-run under the new scheme and the old ones moved into `_archive/` by hand**
+  (no migration code — confirmed in ADR 0002).
 
 ## Tests
 
-`cd rrg-cli && PYTHONPATH=src .venv/bin/python -m pytest -q` — green (58 tests). `pyreadstat`
-must be installed for strict preflight (it's a dependency). Files: origin, **intake** (new:
-split_intake / intake_prompt original-numbering / save_intake / cross_run_overview /
-headline-stat / intake+overview HTTP), grading, extract, figures, dispatch, scorecard_gui,
-packaging_blinding, converter, scaffold_doctor, cli.
+`cd rrg-cli && PYTHONPATH=src .venv/bin/python -m pytest -q` — **green (80 tests)** on the Mac.
+From the Cowork sandbox the venv binaries won't run; see the Lessons note for the sandbox recipe.
+`pyreadstat` must be installed for strict preflight (it's a dependency). Files: origin, intake,
+grading, extract, figures, **dispatch** (now also: run_id suffixing / no-clobber re-run /
+RRG_RUN.txt marker auto-resolve / marker-less fallback / breach guard + grading block /
+acknowledge), **archive** (new: archive→restore round-trip / purge confinement / restore
+no-clobber / delete reroute), **explorer** (new: blinding-aware redaction / x-ray reveal /
+tree_file gate / path confinement), scorecard_gui, packaging_blinding, converter,
+scaffold_doctor, **cli** (now also: `rrg runs` registry + archive round-trip).
