@@ -58,7 +58,7 @@ async function busy(button,label,work){const prior=button.textContent;button.dis
 
 function applyData(data){DATA=data;document.getElementById('project-name').textContent=DATA.project;document.getElementById('project-root').textContent=DATA.root}
 async function refresh(){applyData(await api('/api/bootstrap'));applyHashView();render()}
-function render(){({dashboard:renderDashboard,setup:renderSetup,convert:renderConvert,build:renderBuild,prompts:renderPrompts,runs:renderRuns,review:renderReview,origin:renderOrigin,projects:renderProjects}[VIEW]||renderDashboard)()}
+function render(){({dashboard:renderDashboard,setup:renderSetup,convert:renderConvert,build:renderBuild,prompts:renderPrompts,runs:renderRuns,review:renderReview,origin:renderOrigin,files:renderExplorer,guide:renderGuide,projects:renderProjects}[VIEW]||renderDashboard)()}
 function knownViews(){return Array.from(document.querySelectorAll('nav button')).map(button=>button.dataset.view)}
 function applyHashView(){const target=location.hash.slice(1);VIEW=knownViews().includes(target)?target:'dashboard';document.querySelectorAll('nav button').forEach(button=>button.classList.toggle('active',button.dataset.view===VIEW))}
 function activateView(view){VIEW=view;document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===view));history.replaceState(null,'','#'+view);render()}
@@ -72,6 +72,86 @@ function renderProjects(){
   app.innerHTML=`<div class="card hero"><div><div class="eyebrow">Confined workspace</div><h2>Projects</h2><p>Each study keeps separate data, manifests, packages, runs, and withheld results. Switching reloads the full project-scoped interface.</p></div><div class="pill">${esc(workspace.root)}</div></div><div class="card"><h2>Workspace projects</h2><table><thead><tr><th>Project</th><th>Relative root</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div class="card"><h2>New project</h2><p class="mut">Create a new child directory inside this workspace from the standard RRG scaffold.</p><div class="row"><div class="field"><label>Project name</label><input id="new-project-name" type="text" placeholder="MovieRatings demo"></div><div class="field"><label>Workspace-relative directory</label><input id="new-project-path" type="text" placeholder="demo_projects/MovieRatings"></div></div><div class="actions"><button class="btn primary" id="new-project-create">Create project</button></div><div id="new-project-result"></div></div>`;
   document.querySelectorAll('[data-project-root]').forEach(button=>button.onclick=event=>busy(event.currentTarget,'Opening…',async()=>{applyData(await post('/api/project/select',{root:button.dataset.projectRoot}));selectedRun='';selectedQuestion=1;activateView('dashboard');toast(`Opened ${DATA.project}`)}).catch(error=>toast(error.message,true)));
   document.getElementById('new-project-create').onclick=event=>busy(event.currentTarget,'Creating…',async()=>{applyData(await post('/api/project/create',{name:value('new-project-name'),path:value('new-project-path')}));selectedRun='';selectedQuestion=1;activateView('setup');toast(`Created ${DATA.project}`)}).catch(error=>{toast(error.message,true);document.getElementById('new-project-result').innerHTML=banner('bad',error.message)});
+}
+
+let XRAY=false;
+function treeNodeHTML(node){
+  if(node.dir){
+    if(node.redacted)return `<div class="tnode tredacted">${esc(node.name)}/ <span class="pill">withheld</span></div>`;
+    const kids=(node.children||[]).map(treeNodeHTML).join('')||'<div class="tnode mut">empty</div>';
+    return `<details class="tdir"><summary>${esc(node.name)}/</summary><div class="tchildren">${kids}</div></details>`;
+  }
+  if(node.redacted)return `<div class="tnode tredacted">${esc(node.name)} <span class="pill">withheld</span></div>`;
+  return `<div class="tnode tfile" data-tpath="${esc(node.path)}">${esc(node.name)} <span class="mut">${Math.ceil((node.size||0)/1024)} KB</span></div>`;
+}
+async function loadTree(){
+  const target=document.getElementById('tree');
+  try{const data=await api('/api/tree',{xray:XRAY?'1':'0'});target.innerHTML=data.tree.map(treeNodeHTML).join('')||'<div class="empty">No files.</div>';
+    target.querySelectorAll('[data-tpath]').forEach(item=>item.onclick=()=>loadTreeFile(item.dataset.tpath));
+  }catch(error){target.innerHTML=banner('bad',error.message)}
+}
+async function loadTreeFile(path){
+  const preview=document.getElementById('tfile-preview');
+  document.querySelectorAll('#tree [data-tpath]').forEach(item=>item.classList.toggle('active',item.dataset.tpath===path));
+  preview.innerHTML='<div class="empty">Loading…</div>';
+  try{const result=await api('/api/tree/file',{path,xray:XRAY?'1':'0'});
+    if(result.kind==='image')preview.innerHTML=`<div class="tprev-head">${esc(path)}</div><img src="${result.data_url}" alt="${esc(path)}">`;
+    else if(result.kind==='text')preview.innerHTML=`<div class="tprev-head">${esc(path)}</div><pre>${esc(result.text)}</pre>`;
+    else preview.innerHTML=`<div class="tprev-head">${esc(path)}</div><div class="empty">${esc(result.message||'No preview.')}</div>`;
+  }catch(error){preview.innerHTML=banner('bad',error.message)}
+}
+async function loadArchivePanel(){
+  const target=document.getElementById('archive-list');if(!target)return;
+  try{const data=await api('/api/archive');const items=data.items||[];
+    if(!items.length){target.innerHTML='<div class="empty">Archive is empty.</div>';return}
+    target.innerHTML=`<table><thead><tr><th>Item</th><th>Kind</th><th>Archived</th><th></th></tr></thead><tbody>${items.map(item=>`<tr><td><code>${esc(item.original)}</code></td><td>${pill(false,esc(item.kind))}</td><td class="mut">${esc((item.archived_at||'').slice(0,19).replace('T',' '))}</td><td><button class="btn" data-restore="${esc(item.id)}">Restore</button> <button class="btn danger" data-purge="${esc(item.id)}">Purge</button></td></tr>`).join('')}</tbody></table>`;
+    target.querySelectorAll('[data-restore]').forEach(button=>button.onclick=event=>busy(event.currentTarget,'Restoring…',async()=>{await post('/api/archive/restore',{id:button.dataset.restore});toast('Restored');loadArchivePanel();loadTree()}).catch(error=>toast(error.message,true)));
+    target.querySelectorAll('[data-purge]').forEach(button=>button.onclick=event=>{if(!confirm('Permanently delete this archived item? This cannot be undone.'))return;busy(event.currentTarget,'Purging…',async()=>{await post('/api/archive/purge',{id:button.dataset.purge});toast('Purged');loadArchivePanel()}).catch(error=>toast(error.message,true))});
+  }catch(error){target.innerHTML=banner('bad',error.message)}
+}
+function renderExplorer(){
+  app.innerHTML=`<div class="card hero"><div><div class="eyebrow">Project files</div><h2>Explorer</h2><p>Browse everything in this study. The default view is <b>blinding-aware</b> — withheld regions (origin answer key, private, scorecards) show as redacted placeholders, so you can confirm they exist and stay hidden. Operator x-ray reveals them; it never leaves this screen and does not affect what validators receive.</p></div><label class="check xray-toggle"><input id="xray-toggle" type="checkbox" ${XRAY?'checked':''}> Operator x-ray</label></div>
+  <div class="card"><div class="split"><div id="tree" class="file-list tree">Loading…</div><div id="tfile-preview" class="empty">Select a file to preview.</div></div></div>
+  <div class="card"><h2>Archive</h2><p class="mut">Items removed anywhere in RRG are moved here, not deleted. Restore returns them to their original path; purge deletes permanently.</p><div id="archive-list">Loading…</div></div>`;
+  document.getElementById('xray-toggle').onchange=event=>{XRAY=event.currentTarget.checked;loadTree();const preview=document.getElementById('tfile-preview');preview.innerHTML='<div class="empty">Select a file to preview.</div>'};
+  loadTree();loadArchivePanel();
+}
+
+const GUIDE_STEPS=[
+  {title:'Set up the study &amp; convert data',tabs:'Setup · Convert',
+   body:`<p>Fill the cartridge — study identity, dataset, questions, stages, and the per-stage model roster. Then convert the source into CSV/Parquet derivatives; every cell is verified bit-for-bit against the source.</p>`,
+   cmd:'rrg convert',
+   concept:'Verified data derivatives keep <b>stable names</b> — they are never run_id-suffixed, so the manifest stays reproducible. Preflight must be green before you build.'},
+  {title:'Build a blinded package',tabs:'Build',
+   body:`<p>RRG assembles the stage package in staging, runs the blinding lint (no withheld file can get in), and on pass writes a <b>self-contained delivery zip</b> with no operator metadata.</p>`,
+   cmd:'rrg package --stage robustness --model Gemini',
+   concept:'Each build mints an opaque <code>run_id</code> that suffixes the run folder, package dir, and zip — so re-running a model <b>never clobbers</b> prior history.'},
+  {title:'Dispatch — move the zip OUT of the project',tabs:'(your runner)',
+   body:`<p>Copy the delivery zip to a scratch directory, container, or another machine — anywhere that does <b>not</b> have the project's <code>operator/</code> tree as a parent. This placement is what stops a validator from reaching the answer key.</p>`,
+   cmd:'',
+   concept:'Isolation by placement (ADR 0001). <b>Never unzip inside <code>operator/</code>.</b> The zip carries a tiny <code>RRG_RUN.txt</code> marker — an opaque id and nothing else.'},
+  {title:'Run the validator in isolation',tabs:'Prompts',
+   body:`<p>Run the model on the unzipped package. In the GUI, render the staged prompt turns and paste them in order (robustness uses the discuss→lock flow). When finished, zip the validator's output folder — leaving <code>RRG_RUN.txt</code> in it.</p>`,
+   cmd:'',
+   concept:'The validator only ever sees the package — never the origin results, methodology key, or your operator files.'},
+  {title:'Import the results back',tabs:'Build ▸ Import · Runs',
+   body:`<p>Drop the returned results zip into RRG. It reads <code>RRG_RUN.txt</code>, looks the <code>run_id</code> up in the provenance log, and auto-resolves the stage, model, and run folder — no manual selection.</p>`,
+   cmd:'rrg import returned-results.zip',
+   concept:'Auto-resolution re-binds the results to their build. If the marker is missing, fall back to <code>--stage</code> / <code>--model</code>.'},
+  {title:'Automatic breach check',tabs:'(runs on import)',
+   body:`<p>On import, RRG hashes every returned file against the withheld answer key. A byte-for-byte match means a secret was <b>copied</b> — a near-certain blinding breach: it is flagged and <b>grading is blocked</b> until you acknowledge it. A results source from inside the project tree raises a softer warning.</p>`,
+   cmd:'rrg acknowledge-breach --run operator/robustness_Gemini__a1b2c3d4',
+   concept:'This guards the <b>return</b> path — complementing the content-lint (guards what is in the package) and isolation (guards reach).'},
+  {title:'Review, grade &amp; finalize',tabs:'Review &amp; Grade · Files',
+   body:`<p>Compare validator vs origin per question — stats, narratives, figures — and confirm a verdict for each. Finalizing writes a versioned scorecard. Browse everything anytime in the <b>Files</b> tab (blinding-aware, with an operator x-ray toggle); anything you delete goes to the <b>Archive</b>, where you can restore or purge it.</p>`,
+   cmd:'rrg runs   # every build and its status: pending / returned / graded / ⚠breach',
+   concept:'A run is <b>graded</b> only when every question has a confirmed verdict. Deletion is reversible by default.'},
+];
+let GUIDE_ACTIVE=0;
+function renderGuide(){
+  const steps=GUIDE_STEPS.map((step,index)=>`<div class="tl-step${index===GUIDE_ACTIVE?' active':''}" data-step="${index}"><div class="tl-node">${index+1}</div><div class="tl-main"><div class="tl-head">${step.title}<span class="tl-tabs">${step.tabs}</span></div><div class="tl-body">${step.body}${step.cmd?`<pre>${esc(step.cmd)}</pre>`:''}<div class="tl-concept">${step.concept}</div></div></div></div>`).join('');
+  app.innerHTML=`<div class="card hero"><div><div class="eyebrow">How RRG works</div><h2>The validation round-trip</h2><p>Seven steps from a blinded package to a finalized scorecard. Click any step to expand it. Each one names the tab to use and the matching <code>rrg</code> command.</p></div></div><div class="card"><div class="timeline">${steps}</div></div>`;
+  document.querySelectorAll('.tl-head').forEach(head=>head.onclick=()=>{GUIDE_ACTIVE=Number(head.closest('.tl-step').dataset.step);document.querySelectorAll('.tl-step').forEach(step=>step.classList.toggle('active',Number(step.dataset.step)===GUIDE_ACTIVE))});
 }
 
 function renderDashboard(){
@@ -211,7 +291,7 @@ function renderReview(){
   const cards=(DATA.scorecards||[]).map(card=>`<tr><td>${esc(card.name)}</td><td>${Math.ceil(card.size/1024)} KB</td><td>${card.protected?pill(true,'finalized'):'<span class="pill">draft</span>'}</td><td><button class="btn" data-card-view="${esc(card.path)}">View</button> <button class="btn danger" data-card-del="${esc(card.path)}"${card.protected?' disabled title="Reopen the run to delete"':''}>Delete</button></td></tr>`).join('');
   app.innerHTML=`<div class="card hero"><div><div class="eyebrow">Compare → grade → scorecard</div><h2>Review &amp; Grade</h2><p>Put the held-back original beside the validator answer for each question, confirm a verdict, then finalize to a scorecard. A run counts as graded only once every question is confirmed by you.</p></div></div>${returned.length?`<div class="card"><details class="turn"><summary>Overview — all runs (stats snapshot)</summary><div class="turn-body" id="overview-body"><div class="empty">Loading…</div></div></details></div>`:''}<div class="card"><div class="field"><label>Returned run</label><select id="review-run">${runOptions||'<option value="">No returned runs</option>'}</select></div><div id="review-body">${returned.length?'<div class="empty">Loading…</div>':'<div class="empty">No returned validator runs yet. Build and dispatch a package, then import the returned output folder.</div>'}</div></div><div class="card"><h2>Scorecards</h2>${cards?`<table><thead><tr><th>Scorecard</th><th>Size</th><th>State</th><th></th></tr></thead><tbody>${cards}</tbody></table>`:'<div class="empty">No scorecards yet. Finalize a fully-graded run to create one.</div>'}<div id="review-card-preview"></div></div>`;
   document.querySelectorAll('[data-card-view]').forEach(button=>button.onclick=async()=>{const result=await api('/api/scorecard',{path:button.dataset.cardView});document.getElementById('review-card-preview').innerHTML=`<div class="card"><h2>${esc(result.path)}</h2><div class="md">${md(result.text)}</div></div>`});
-  document.querySelectorAll('[data-card-del]').forEach(button=>button.onclick=event=>busy(event.currentTarget,'Deleting…',async()=>{await post('/api/scorecard/delete',{path:button.dataset.cardDel});toast('Scorecard deleted');DATA=await api('/api/bootstrap');renderReview()}).catch(error=>toast(error.message,true)));
+  document.querySelectorAll('[data-card-del]').forEach(button=>button.onclick=event=>busy(event.currentTarget,'Deleting…',async()=>{await post('/api/scorecard/delete',{path:button.dataset.cardDel});toast('Scorecard archived (restore from Files ▸ Archive)');DATA=await api('/api/bootstrap');renderReview()}).catch(error=>toast(error.message,true)));
   const runSelect=document.getElementById('review-run');
   if(returned.length){runSelect.onchange=()=>loadReviewRun(runSelect.value);loadReviewRun(returned.some(run=>run.path===selectedRun)?selectedRun:returned[0].path);loadOverview()}
 }
@@ -244,7 +324,7 @@ async function loadReviewRun(run){
   document.querySelectorAll('[data-rq]').forEach(button=>button.onclick=()=>loadReviewQuestion(Number(button.dataset.rq)));
   const finalize=document.getElementById('review-finalize');if(finalize)finalize.onclick=event=>busy(event.currentTarget,'Finalizing…',async()=>{await post('/api/grading/finalize',{run});toast('Scorecard created');DATA=await api('/api/bootstrap');renderReview()}).catch(error=>toast(error.message,true));
   const reopen=document.getElementById('review-reopen');if(reopen)reopen.onclick=event=>busy(event.currentTarget,'Reopening…',async()=>{await post('/api/grading/reopen',{run});toast('Reopened for editing');DATA=await api('/api/bootstrap');loadReviewRun(run)}).catch(error=>toast(error.message,true));
-  const discard=document.getElementById('review-del-grading');if(discard)discard.onclick=event=>busy(event.currentTarget,'Discarding…',async()=>{await post('/api/grading/delete',{run});toast('Grading discarded');DATA=await api('/api/bootstrap');loadReviewRun(run)}).catch(error=>toast(error.message,true));
+  const discard=document.getElementById('review-del-grading');if(discard)discard.onclick=event=>busy(event.currentTarget,'Discarding…',async()=>{await post('/api/grading/delete',{run});toast('Grading archived (restore from Files ▸ Archive)');DATA=await api('/api/bootstrap');loadReviewRun(run)}).catch(error=>toast(error.message,true));
   loadReviewQuestion(REVIEW.verdicts.some(item=>item.new===selectedQuestion)?selectedQuestion:(REVIEW.verdicts[0]?REVIEW.verdicts[0].new:1));
 }
 async function loadReviewQuestion(question){
