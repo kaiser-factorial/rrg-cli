@@ -130,6 +130,10 @@ def build_parser() -> argparse.ArgumentParser:
     purge_cmd.add_argument("id", help="archive item id (see archive-ls)")
     purge_cmd.add_argument("--json", action="store_true")
 
+    runs_cmd = sub.add_parser("runs", help="list the run registry (built runs and their status)")
+    _add_project_args(runs_cmd)
+    runs_cmd.add_argument("--json", action="store_true")
+
     prompt = sub.add_parser("prompt", help="render a stage prompt")
     _add_project_args(prompt)
     prompt.add_argument("--stage", required=True)
@@ -242,6 +246,22 @@ def run(args: argparse.Namespace) -> int:
 
         result = grading_module.acknowledge_breach(project, args.run)
         _emit(result if args.json else f"Breach acknowledged for {args.run}; grading unblocked.", args.json)
+        return 0
+    if args.command == "runs":
+        from .gui_service import GUIState
+
+        rows = GUIState(project).runs()
+        if args.json:
+            _emit({"runs": rows}, args.json)
+        elif not rows:
+            print("No runs yet.")
+        else:
+            for row in rows:
+                status = "graded" if row["graded"] else ("returned" if row["returned"] else "pending")
+                if row.get("flagged"):
+                    status += " ⚠BREACH"
+                run_id = row.get("run_id") or "—"
+                print(f"{row['stage']:<14} {row['model']:<22} {run_id:<10} {status:<18} {row['file_count']} files")
         return 0
     if args.command == "archive":
         from . import archive as archive_module

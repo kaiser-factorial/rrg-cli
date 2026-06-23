@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import fnmatch
 import hashlib
 import json
 import mimetypes
@@ -130,6 +131,98 @@ class GUIState:
                 continue
         return roots
 
+    def _redaction_rules(self) -> tuple[list[str], list[str]]:
+        """Blinding-aware redaction, derived from the cartridge's withheld config (ADR 0002).
+
+        Returns (path-prefixes, basename-globs). A node is redacted in the default explorer
+        view if its project-relative path falls under a prefix or its basename matches a glob —
+        i.e. exactly the answer key, private/operator secrets, scorecards, and methodology key a
+        validator must never see. The operator x-ray bypasses all of this.
+        """
+        prefixes: list[str] = []
+        name_globs: list[str] = []
+        withheld = list(self.project.config.get("files", {}).get("withheld", []) or [])
+        for value in (
+            self.project.study.get("original", {}).get("results_key"),
+            self.project.config.get("origin", {}).get("results_key"),
+        ):
+            if value:
+                withheld.append(str(value))
+        for entry in withheld:
+            cleaned = str(entry).rstrip("/")
+            if any(char in cleaned for char in "*?["):
+                name_globs.append(Path(cleaned).name)
+            else:
+                prefixes.append(cleaned)
+        for entry in self.project.config.get("blinding", {}).get("always_withhold", []) or []:
+            cleaned = str(entry).rstrip("/")
+            name_globs.append(Path(cleaned).name)
+        return prefixes, name_globs
+
+    @staticmethod
+    def _is_redacted(rel_posix: str, name: str, prefixes: list[str], name_globs: list[str]) -> bool:
+        for prefix in prefixes:
+            if rel_posix == prefix or rel_posix.startswith(prefix + "/"):
+                return True
+        return any(fnmatch.fnmatch(name, pattern) for pattern in name_globs)
+
+    def file_tree(self, xray: bool = False) -> dict[str, Any]:
+        root = self.project.root
+        prefixes, name_globs = self._redaction_rules()
+
+        def build(directory: Path) -> list[dict[str, Any]]:
+            nodes: list[dict[str, Any]] = []
+            try:
+                entries = sorted(directory.iterdir(), key=lambda item: (item.is_file(), item.name.lower()))
+            except OSError:
+                return nodes
+            for entry in entries:
+                if entry.name == ".DS_Store":
+                    continue
+                rel = entry.relative_to(root).as_posix()
+                redacted = (not xray) and self._is_redacted(rel, entry.name, prefixes, name_globs)
+                node = {"name": entry.name, "path": rel, "dir": entry.is_dir(), "redacted": redacted}
+                if entry.is_dir():
+                    node["children"] = None if redacted else build(entry)
+                else:
+                    node["size"] = entry.stat().st_size
+                    extension = entry.suffix.lower()
+                    node["kind"] = (
+                        "image" if extension in IMAGE_EXTENSIONS
+                        else ("text" if extension in TEXT_EXTENSIONS else "binary")
+                    )
+                nodes.append(node)
+            return nodes
+
+        return {"root": str(root), "xray": bool(xray), "tree": build(root)}
+
+    def tree_file(self, rel_value: str, xray: bool = False) -> dict[str, Any]:
+        root = self.project.root.resolve()
+        path = (root / rel_value).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise RRGError("path escapes the project root") from exc
+        if not path.is_file():
+            raise RRGError("not a previewable file")
+        if not xray:
+            prefixes, name_globs = self._redaction_rules()
+            parts = path.relative_to(root).as_posix().split("/")
+            for index in range(len(parts)):
+                if self._is_redacted("/".join(parts[: index + 1]), parts[index], prefixes, name_globs):
+                    raise RRGError(
+                        "this file is withheld in the blinding-aware view; enable operator x-ray to open it"
+                    )
+        extension = path.suffix.lower()
+        if extension in IMAGE_EXTENSIONS:
+            if path.stat().st_size > 10 * 1024 * 1024:
+                return {"kind": "binary", "message": "image too large to preview"}
+            mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            return {"kind": "image", "data_url": f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode()}"}
+        if extension in TEXT_EXTENSIONS:
+            return {"kind": "text", "text": path.read_text(encoding="utf-8", errors="replace")[:2_000_000]}
+        return {"kind": "binary", "message": "binary file — no inline preview"}
+
     def runs(self) -> list[dict[str, Any]]:
         operator = self.project.path_setting("operator", "operator")
         records = self._provenance()
@@ -159,15 +252,18 @@ class GUIState:
             files = [item for item in path.rglob("*") if item.is_file()] if path.is_dir() else []
             relative = str(path.relative_to(self.project.root))
             returned = bool(files)
+            breach = grading_module.load_breach(self.project, relative)
             rows.append(
                 {
                     "path": relative,
                     "name": path.name,
                     "stage": stage,
                     "model": model,
+                    "run_id": record.get("run_id"),
                     "returned": returned,
                     "file_count": len(files),
                     "graded": returned and grading_module.is_graded(self.project, relative, question_list),
+                    "flagged": bool(breach and breach.get("blocking") and not breach.get("acknowledged")),
                 }
             )
         return rows

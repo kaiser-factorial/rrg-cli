@@ -39,6 +39,20 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
 
 ## Built so far (all committed, tested)
 
+- **Round-trip run lifecycle (ADR 0002, slices A–F, all implemented + tested)** — every build
+  mints an opaque `run_id` that suffixes the run folder/package/zip, so re-runs never clobber
+  (`rrg runs` lists the registry with pending/returned/graded/⚠breach status). The delivery zip
+  carries a blinding-safe `RRG_RUN.txt` marker; `rrg import` reads it and auto-resolves
+  stage/model/run-folder from the provenance log (manual `--stage/--model` fallback). On import,
+  a **breach guard** hashes returned files against the withheld answer key — a copied secret is
+  flagged and *blocks grading* until `rrg acknowledge-breach`; a source inside the project tree
+  warns (non-blocking). Deletion is now **reversible**: `delete_scorecard`/`delete_grading` and
+  the new `rrg archive` move into `operator/_archive/` (logged in `index.jsonl`); `rrg restore`
+  reverses, `rrg purge` hard-deletes. New **Files tab**: blinding-aware file tree (withheld
+  regions shown as redacted placeholders) with an operator x-ray toggle, plus the Archive panel.
+  Endpoints: `/api/tree`, `/api/tree/file`, `/api/archive[/restore|/purge]`,
+  `/api/grading/acknowledge-breach`. NB: `make_handler` wraps state in `WorkspaceState`, so any
+  new GUIState method must also be proxied in `workspace.py`.
 - **Workspace mode** — `rrg gui --workspace DIR` confines one workspace, switches projects
   under a lock; Projects tab + new-project scaffolding.
 - **Origin tab** — per-question separation matrix (questions ↔ protocol ↔ origin key),
