@@ -162,8 +162,9 @@ The cartridge may be wrapped in a top-level `study:` key or flat. Fields:
 6. **`rrg package --stage … --model …`** assembles the package in staging, lints it
    against the blinding rules, and publishes only if the lint passes (or `--force`,
    recorded). Provenance is written per package and appended to a log.
-7. **Dispatch** the package to the validator out of band; it returns an output folder
-   under `operator/`.
+7. **Dispatch** the delivery zip to the validator and run it **outside the project** so
+   the operator's secrets are unreachable; **`rrg import`** brings its returned outputs
+   back into `operator/<run>/`.
 8. **Review** returned runs (GUI *Runs*), compare validator vs. origin figures per
    question (*Compare*), and record notes.
 9. **`rrg scorecard`** generates a provisional, versioned per-question grading scaffold
@@ -190,6 +191,8 @@ ready / not verified / blocked / lint failed), `1` = error.
   `--force` publishes despite lint failure (recorded as `forced_override`);
   `--allow-unlisted` permits a model not in the roster. Exit `2` if blocked.
 - **`rrg lint <package> --stage S`** — lint an existing package directory.
+- **`rrg import <returned> --stage S --model M [--label L]`** — import a validator's
+  returned outputs (a folder or `.zip`) into its run folder, with zip-slip protection.
 - **`rrg prompt --stage S --model M [--mode discuss|nodiscuss] [--turn N]
   [--include-reminders]`** — render a stage prompt (or a single turn).
 - **`rrg scorecard --run R --stage S --model M [--key] [--map] [--out-dir]
@@ -231,6 +234,19 @@ SHA-256, the prompt file's path and hash, the blinding result and flags, determi
 settings, any forced override, the output folder, and timestamp). The same record is
 appended to `operator/_packages/provenance_log.jsonl`, which the GUI reads to mark
 which runs were dispatched.
+
+**Isolation (lint guards contents; isolation guards reach).** The lint controls what is
+*inside* a package, not what a validator can *reach* on disk. Because the operator
+directory holds the secrets (`origin/`, `private/`, scorecards, other runs) and
+`shared/ANALYSIS_PROTOCOL_OG.md`, a validator run *inside* the project can simply
+traverse to them (`ls ../../../origin/`). So on publish, RRG also writes a
+self-contained delivery **zip** (`<package_dir>.zip`, package files only, no
+`_provenance.json`). The validator must run on that zip in an environment **separate
+from the project** — ideally a container — where the secrets are not reachable. Its
+returned outputs come back via `rrg import`, which copies a returned folder or zip into
+`operator/<run>/` and rejects any entry that resolves outside the run folder (zip-slip
+protection). RRG deliberately does **not** add "don't snoop" instructions to the prompt;
+it removes access rather than asking. See `docs/adr/0001-validator-isolation.md`.
 
 ---
 

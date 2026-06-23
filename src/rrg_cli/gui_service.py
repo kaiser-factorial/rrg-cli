@@ -13,6 +13,7 @@ from typing import Any
 
 from . import extract as extract_module
 from . import grading as grading_module
+from . import importer as importer_module
 from . import origin as origin_module
 from .converter import convert_dataset
 from .doctor import inspect_project
@@ -412,6 +413,16 @@ class GUIState:
             force=bool(payload.get("force")),
             allow_unlisted=bool(payload.get("allow_unlisted")),
         )
+
+    def import_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            return importer_module.import_run(
+                self.project,
+                str(payload.get("stage", "")),
+                str(payload.get("model", "")),
+                str(payload.get("source", "")),
+                label=payload.get("label") or None,
+            )
 
     def make_scorecard(self, payload: dict[str, Any]) -> dict[str, Any]:
         return build_scorecard(

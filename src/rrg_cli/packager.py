@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -103,12 +104,22 @@ def build_package(
             "package_dir": str(destination),
         }
         published = False
+        package_zip: str | None = None
         if not dry_run and not blocked:
             (staged / "_provenance.json").write_text(
                 json.dumps(provenance, indent=2, ensure_ascii=False), encoding="utf-8"
             )
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(staged, destination, copy_function=shutil.copyfile)
+            # Self-contained delivery zip: package contents only, no operator metadata.
+            # Run the validator on this zip OUTSIDE the project so it cannot reach the
+            # operator's secret folders. See docs/adr/0001-validator-isolation.md.
+            zip_path = destination.parent / f"{destination.name}.zip"
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as bundle:
+                for path in sorted(destination.rglob("*")):
+                    if path.is_file() and path.name not in {"_provenance.json", ".DS_Store"}:
+                        bundle.write(path, path.relative_to(destination))
+            package_zip = str(zip_path)
             output_folder.mkdir(parents=True, exist_ok=True)
             log_path = package_root / "provenance_log.jsonl"
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -120,6 +131,7 @@ def build_package(
             "published": published,
             "dry_run": dry_run,
             "package_dir": str(destination),
+            "package_zip": package_zip,
             "output_folder": str(output_folder),
             "report_name": report_name,
             "lint": lint.as_dict(),

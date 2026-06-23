@@ -12,6 +12,7 @@ from .converter import DEFAULT_NA_TOKEN, SUPPORTED_FORMATS, convert_dataset
 from .doctor import inspect_project
 from .errors import RRGError
 from .gui import serve
+from .importer import import_run
 from .packager import build_package
 from .project import Project
 from .prompts import render_prompt
@@ -94,6 +95,14 @@ def build_parser() -> argparse.ArgumentParser:
     lint.add_argument("--stage", required=True)
     lint.add_argument("--json", action="store_true")
 
+    importer = sub.add_parser("import", help="import a validator's returned outputs into its run folder")
+    _add_project_args(importer)
+    importer.add_argument("source", help="the returned folder or .zip from the validator")
+    importer.add_argument("--stage", required=True)
+    importer.add_argument("--model", required=True)
+    importer.add_argument("--label")
+    importer.add_argument("--json", action="store_true")
+
     prompt = sub.add_parser("prompt", help="render a stage prompt")
     _add_project_args(prompt)
     prompt.add_argument("--stage", required=True)
@@ -170,6 +179,10 @@ def run(args: argparse.Namespace) -> int:
         report = lint_package(project.path(args.package), args.stage, project)
         _emit(report.as_dict(), args.json)
         return 0 if report.passed else 2
+    if args.command == "import":
+        result = import_run(project, args.stage, args.model, args.source, label=args.label)
+        _emit(result if args.json else f"Imported {result['count']} files into {result['run']}", args.json)
+        return 0
     if args.command == "prompt":
         rendered = render_prompt(project, args.stage, args.model, mode=args.mode)
         if args.turn:

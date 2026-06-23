@@ -158,6 +158,8 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     result = state.convert(payload)
                 elif path == "/api/package":
                     result = state.package(payload)
+                elif path == "/api/import":
+                    result = state.import_run(payload)
                 elif path == "/api/scorecard":
                     result = state.make_scorecard(payload)
                 elif path == "/api/note":

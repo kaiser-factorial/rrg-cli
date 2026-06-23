@@ -230,6 +230,9 @@ class WorkspaceState:
     def package(self, *args, **kwargs):
         return self._call("package", *args, **kwargs)
 
+    def import_run(self, *args, **kwargs):
+        return self._call("import_run", *args, **kwargs)
+
     def make_scorecard(self, *args, **kwargs):
         return self._call("make_scorecard", *args, **kwargs)
 
