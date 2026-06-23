@@ -18,11 +18,28 @@ from .project import Project
 from .utils import safe_label
 
 
-def run_output_folder(project: Project, stage_id: str, run_label: str) -> Path:
+def run_output_folder(
+    project: Project, stage_id: str, run_label: str, run_id: str | None = None
+) -> Path:
+    """Resolve the operator-side run folder for a (stage, model) pair.
+
+    With an explicit ``run_id`` (ADR 0002), the folder is the run_id-suffixed slug the build
+    created. Without one, we resolve the newest run_id-suffixed folder that a build left for
+    this label; if none exists (pre-ADR-0002 layout, or a manual import with no prior build)
+    we fall back to the legacy un-suffixed name.
+    """
     stage = project.stage(stage_id)
     operator_root = project.path_setting("operator", "operator")
     template = str(stage.get("output_folder", f"{stage_id}_{{model}}"))
-    return operator_root / template.format(model=run_label, MODEL=run_label)
+    if run_id:
+        slug = f"{run_label}__{run_id}"
+        return operator_root / template.format(model=slug, MODEL=slug)
+    base = template.format(model=run_label, MODEL=run_label)
+    if operator_root.is_dir():
+        matches = sorted(operator_root.glob(f"{base}__*"), key=lambda path: path.stat().st_mtime)
+        if matches:
+            return matches[-1]
+    return operator_root / base
 
 
 def _safe_target(destination: Path, member: str) -> Path:
@@ -41,11 +58,12 @@ def import_run(
     source: str | Path,
     *,
     label: str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     project.stage(stage_id)  # validate stage exists
     roster_entry = project.model(stage_id, model_query)
     run_label = label or safe_label(roster_entry.get("model") if roster_entry else model_query)
-    destination = run_output_folder(project, stage_id, run_label).resolve()
+    destination = run_output_folder(project, stage_id, run_label, run_id).resolve()
     source = Path(source).expanduser().resolve()
     if not source.exists():
         raise RRGError(f"returned output not found: {source}")
@@ -77,6 +95,7 @@ def import_run(
     return {
         "run": str(destination.relative_to(project.root)),
         "output_folder": str(destination),
+        "run_id": run_id,
         "imported": sorted(imported),
         "count": len(imported),
     }

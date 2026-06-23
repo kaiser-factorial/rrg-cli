@@ -22,6 +22,51 @@ def test_package_writes_delivery_zip(ready_project):
     assert "_provenance.json" not in names, "operator metadata must not be delivered"
 
 
+def test_package_mints_run_id_and_suffixes_names(ready_project):
+    result = build_package(ready_project, "replication", "ReplicationModel")
+    run_id = result["run_id"]
+    assert run_id and len(run_id) == 8 and all(c in "0123456789abcdef" for c in run_id)
+    assert result["provenance"]["run_id"] == run_id
+    # The run folder, package dir, and zip all carry the run_id suffix.
+    assert result["output_folder"].endswith(f"__{run_id}")
+    assert Path(result["package_dir"]).name.endswith(f"__{run_id}")
+    assert Path(result["package_zip"]).name == f"ReplicationModel__{run_id}.zip"
+
+
+def test_repackage_does_not_clobber_run_folder(ready_project):
+    first = build_package(ready_project, "replication", "ReplicationModel")
+    second = build_package(ready_project, "replication", "ReplicationModel")
+    assert first["run_id"] != second["run_id"]
+    assert first["output_folder"] != second["output_folder"]
+    # Both run folders survive — re-running a model accumulates history, never overwrites.
+    assert Path(first["output_folder"]).is_dir()
+    assert Path(second["output_folder"]).is_dir()
+
+
+def test_import_targets_run_id_folder(ready_project, tmp_path: Path):
+    built = build_package(ready_project, "replication", "ReplicationModel")
+    returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "SUMMARY.md").write_text("## Q1\nok", encoding="utf-8")
+    result = import_run(
+        ready_project, "replication", "ReplicationModel", returned, run_id=built["run_id"]
+    )
+    # An explicit run_id lands the results in exactly the folder the build created.
+    assert result["output_folder"] == built["output_folder"]
+    assert (Path(built["output_folder"]) / "SUMMARY.md").is_file()
+
+
+def test_import_without_run_id_resolves_latest_build(ready_project, tmp_path: Path):
+    build_package(ready_project, "replication", "ReplicationModel")
+    latest = build_package(ready_project, "replication", "ReplicationModel")
+    returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "SUMMARY.md").write_text("## Q1\nok", encoding="utf-8")
+    result = import_run(ready_project, "replication", "ReplicationModel", returned)
+    # With no run_id given, import resolves to the newest run_id-suffixed build folder.
+    assert result["output_folder"] == latest["output_folder"]
+
+
 def test_import_run_from_directory(ready_project, tmp_path: Path):
     returned = tmp_path / "returned"
     (returned / "raw").mkdir(parents=True)

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,16 @@ def dump_yaml(value: dict[str, Any]) -> str:
 
 def json_dump(value: Any) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False)
+
+
+def mint_run_id() -> str:
+    """An opaque, blinding-safe correlation id for one build/run.
+
+    Carries no methodology or result information — it is a random token used to bind a
+    returned result set back to the build that produced it (ADR 0002). Eight hex chars is
+    ample for human-scale run counts within a project while staying short in folder names.
+    """
+    return secrets.token_hex(4)
 
 
 def safe_label(value: str) -> str:

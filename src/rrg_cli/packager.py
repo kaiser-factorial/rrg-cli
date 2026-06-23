@@ -13,7 +13,7 @@ from .errors import RRGError
 from .project import Project
 from .prompts import render_prompt
 from .routing import RoutedInput, resolve_send
-from .utils import normalize_permissions, safe_label, sha256
+from .utils import mint_run_id, normalize_permissions, safe_label, sha256
 
 
 def _copy_inputs(inputs: list[RoutedInput], destination: Path) -> list[tuple[str, str]]:
@@ -67,12 +67,18 @@ def build_package(
     if vendor.lower() in excluded:
         raise RRGError(f"validator vendor is excluded because it produced the origin work: {vendor}")
     run_label = label or safe_label(model_name)
+    # Opaque correlation id for this build. Suffixes the run folder, package dir, and zip so
+    # re-running a model never clobbers prior history, and a returned result set can be bound
+    # back to its build (ADR 0002). The report keeps the clean <model> name — the run folder
+    # already disambiguates it.
+    run_id = mint_run_id()
+    run_slug = f"{run_label}__{run_id}"
     inputs = resolve_send(project, stage_id)
     package_root = project.path_setting("packages", "operator/_packages")
-    destination = _unique_destination(package_root / stage_id / run_label)
+    destination = _unique_destination(package_root / stage_id / run_slug)
     operator_root = project.path_setting("operator", "operator")
     output_template = str(stage.get("output_folder", f"{stage_id}_{{model}}"))
-    output_folder = operator_root / output_template.format(model=run_label, MODEL=run_label)
+    output_folder = operator_root / output_template.format(model=run_slug, MODEL=run_slug)
     report_template = str(stage.get("report_name", "{model}_Report.docx"))
     report_name = report_template.format(model=run_label, MODEL=run_label)
 
@@ -88,6 +94,7 @@ def build_package(
             "stage": stage_id,
             "model": model_name,
             "label": run_label,
+            "run_id": run_id,
             "type": roster_entry.get("type") if roster_entry else None,
             "vendor": vendor or None,
             "license": roster_entry.get("license") if roster_entry else None,
@@ -130,6 +137,7 @@ def build_package(
             "blocked": blocked,
             "published": published,
             "dry_run": dry_run,
+            "run_id": run_id,
             "package_dir": str(destination),
             "package_zip": package_zip,
             "output_folder": str(output_folder),

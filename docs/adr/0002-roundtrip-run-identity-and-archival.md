@@ -1,6 +1,6 @@
 # ADR 0002 — Round-trip run identity, breach detection, and archival lifecycle
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-23
 
 ## Context

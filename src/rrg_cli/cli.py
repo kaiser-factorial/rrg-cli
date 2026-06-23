@@ -101,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     importer.add_argument("--stage", required=True)
     importer.add_argument("--model", required=True)
     importer.add_argument("--label")
+    importer.add_argument("--run-id", dest="run_id", help="target a specific build's run folder (ADR 0002)")
     importer.add_argument("--json", action="store_true")
 
     prompt = sub.add_parser("prompt", help="render a stage prompt")
@@ -188,7 +189,9 @@ def run(args: argparse.Namespace) -> int:
         _emit(report.as_dict(), args.json)
         return 0 if report.passed else 2
     if args.command == "import":
-        result = import_run(project, args.stage, args.model, args.source, label=args.label)
+        result = import_run(
+            project, args.stage, args.model, args.source, label=args.label, run_id=args.run_id
+        )
         _emit(result if args.json else f"Imported {result['count']} files into {result['run']}", args.json)
         return 0
     if args.command == "prompt":

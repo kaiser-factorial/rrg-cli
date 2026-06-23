@@ -509,6 +509,7 @@ class GUIState:
                 str(payload.get("model", "")),
                 str(payload.get("source", "")),
                 label=payload.get("label") or None,
+                run_id=payload.get("run_id") or None,
             )
 
     def make_scorecard(self, payload: dict[str, Any]) -> dict[str, Any]:
