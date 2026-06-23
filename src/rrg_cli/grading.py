@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import archive as archive_module
 from .errors import RRGError
 from .project import Project
 from .scorecard import _markdown_section, _material, build_scorecard, load_question_map
@@ -236,9 +237,12 @@ def delete_grading(project: Project, run_value: str) -> dict[str, Any]:
     if data.get("finalized"):
         raise RRGError("grading is finalized; reopen the run before deleting")
     path = _grading_path(project, run_value)
-    if path.is_file():
-        path.unlink()
-    return {"deleted": run_value}
+    if not path.is_file():
+        return {"archived": run_value, "id": None}
+    record = archive_module.archive_item(
+        project, str(path.relative_to(project.root)), kind="grading"
+    )
+    return {"archived": run_value, "id": record["id"]}
 
 
 def delete_scorecard(project: Project, value: str) -> dict[str, Any]:
@@ -256,5 +260,5 @@ def delete_scorecard(project: Project, value: str) -> dict[str, Any]:
                 continue
             if data.get("finalized") and data.get("scorecard") == value:
                 raise RRGError("this scorecard belongs to a finalized grading; reopen the run to delete it")
-    target.unlink()
-    return {"deleted": value}
+    record = archive_module.archive_item(project, value, kind="scorecard")
+    return {"archived": value, "id": record["id"]}

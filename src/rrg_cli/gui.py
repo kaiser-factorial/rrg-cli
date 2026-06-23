@@ -120,6 +120,8 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     return self._json(state.render(query.get("stage", ""), query.get("model", ""), query.get("mode", "discuss")))
                 if path == "/api/runs":
                     return self._json({"runs": state.runs()})
+                if path == "/api/archive":
+                    return self._json(state.list_archive())
                 if path == "/api/run":
                     return self._json(state.run_detail(query.get("run", "")))
                 if path == "/api/file":
@@ -206,6 +208,12 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     result = state.delete_grading(str(payload.get("run", "")))
                 elif path == "/api/scorecard/delete":
                     result = state.delete_scorecard(str(payload.get("path", "")))
+                elif path == "/api/grading/acknowledge-breach":
+                    result = state.acknowledge_breach(str(payload.get("run", "")))
+                elif path == "/api/archive/restore":
+                    result = state.restore_archived(str(payload.get("id", "")))
+                elif path == "/api/archive/purge":
+                    result = state.purge_archived(str(payload.get("id", "")))
                 elif path == "/api/project/select":
                     result = state.select_project(str(payload.get("root", "")))
                 elif path == "/api/project/create":

@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from . import archive as archive_module
 from . import extract as extract_module
 from . import figures as figures_module
 from . import grading as grading_module
@@ -561,6 +562,22 @@ class GUIState:
     def delete_scorecard(self, value: str) -> dict[str, Any]:
         with self._lock:
             return grading_module.delete_scorecard(self.project, value)
+
+    def list_archive(self) -> dict[str, Any]:
+        with self._lock:
+            return {"items": archive_module.list_archive(self.project)}
+
+    def archive_item(self, value: str) -> dict[str, Any]:
+        with self._lock:
+            return archive_module.archive_item(self.project, value)
+
+    def restore_archived(self, item_id: str) -> dict[str, Any]:
+        with self._lock:
+            return archive_module.restore_item(self.project, item_id)
+
+    def purge_archived(self, item_id: str) -> dict[str, Any]:
+        with self._lock:
+            return archive_module.purge_item(self.project, item_id)
 
     def save_setup(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self._lock:

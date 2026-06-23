@@ -111,6 +111,25 @@ def build_parser() -> argparse.ArgumentParser:
     ack.add_argument("--run", required=True, help="the run path the breach was recorded against")
     ack.add_argument("--json", action="store_true")
 
+    archive_cmd = sub.add_parser("archive", help="move a file/dir into the reversible archive")
+    _add_project_args(archive_cmd)
+    archive_cmd.add_argument("path", help="project-relative path to archive")
+    archive_cmd.add_argument("--json", action="store_true")
+
+    archive_ls = sub.add_parser("archive-ls", help="list archived items")
+    _add_project_args(archive_ls)
+    archive_ls.add_argument("--json", action="store_true")
+
+    restore_cmd = sub.add_parser("restore", help="restore an archived item to its original path")
+    _add_project_args(restore_cmd)
+    restore_cmd.add_argument("id", help="archive item id (see archive-ls)")
+    restore_cmd.add_argument("--json", action="store_true")
+
+    purge_cmd = sub.add_parser("purge", help="permanently delete an archived item")
+    _add_project_args(purge_cmd)
+    purge_cmd.add_argument("id", help="archive item id (see archive-ls)")
+    purge_cmd.add_argument("--json", action="store_true")
+
     prompt = sub.add_parser("prompt", help="render a stage prompt")
     _add_project_args(prompt)
     prompt.add_argument("--stage", required=True)
@@ -223,6 +242,36 @@ def run(args: argparse.Namespace) -> int:
 
         result = grading_module.acknowledge_breach(project, args.run)
         _emit(result if args.json else f"Breach acknowledged for {args.run}; grading unblocked.", args.json)
+        return 0
+    if args.command == "archive":
+        from . import archive as archive_module
+
+        record = archive_module.archive_item(project, args.path)
+        _emit(record if args.json else f"Archived {record['original']} (id {record['id']})", args.json)
+        return 0
+    if args.command == "archive-ls":
+        from . import archive as archive_module
+
+        items = archive_module.list_archive(project)
+        if args.json:
+            _emit({"items": items}, args.json)
+        elif not items:
+            print("Archive is empty.")
+        else:
+            for item in items:
+                print(f"{item['id']}  {item['kind']:<9}  {item['original']}")
+        return 0
+    if args.command == "restore":
+        from . import archive as archive_module
+
+        result = archive_module.restore_item(project, args.id)
+        _emit(result if args.json else f"Restored {result['restored']}", args.json)
+        return 0
+    if args.command == "purge":
+        from . import archive as archive_module
+
+        result = archive_module.purge_item(project, args.id)
+        _emit(result if args.json else f"Purged {result['purged']} (permanent)", args.json)
         return 0
     if args.command == "prompt":
         rendered = render_prompt(project, args.stage, args.model, mode=args.mode)
