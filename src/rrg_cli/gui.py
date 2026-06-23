@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 import threading
 import webbrowser
@@ -34,18 +35,24 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
         rrg_token = session_token
 
         def _send(self, status_code: int, payload: bytes, content_type: str) -> None:
-            self.send_response(status_code)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(payload)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header(
-                "Content-Security-Policy",
-                "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'",
-            )
-            self.end_headers()
-            self.wfile.write(payload)
+            try:
+                self.send_response(status_code)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.send_header(
+                    "Content-Security-Policy",
+                    "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+                )
+                self.end_headers()
+                self.wfile.write(payload)
+            except ConnectionError:
+                # The client closed the connection before we finished writing — common when
+                # the browser cancels an in-flight request (e.g. clicking through questions
+                # faster than the figure payloads stream back). Nothing left to send.
+                pass
 
         def _json(self, value, status_code: int = 200) -> None:
             self._send(status_code, json.dumps(value, ensure_ascii=False).encode(), "application/json; charset=utf-8")
@@ -60,9 +67,12 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'")
-            self.end_headers()
-            self.wfile.write(payload)
+            try:
+                self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'")
+                self.end_headers()
+                self.wfile.write(payload)
+            except ConnectionError:
+                pass
 
         def _authorized(self) -> bool:
             return secrets.compare_digest(self.headers.get("X-RRG-Token", ""), session_token)
@@ -215,12 +225,29 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
     return Handler
 
 
+class _DropXrefNoise(logging.Filter):
+    """Drop pypdf's benign 'Ignoring wrong pointing object N 0' xref warnings.
+
+    These come from a slightly malformed cross-reference table in some PDFs; pypdf
+    recovers fine (figures still extract). We drop only this exact message — every
+    other pypdf warning, and any real error or exception, is left untouched.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "wrong pointing object" not in record.getMessage()
+
+
+def _quiet_pdf_xref_noise() -> None:
+    logging.getLogger("pypdf._reader").addFilter(_DropXrefNoise())
+
+
 def serve(
     project: Project,
     port: int = 8765,
     open_browser: bool = False,
     workspace: str | None = None,
 ) -> None:
+    _quiet_pdf_xref_noise()
     server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(project, workspace=workspace))
     url = f"http://127.0.0.1:{port}"
     print(f"RRG GUI: {url}")

@@ -10,10 +10,13 @@ matching figure out of the PDF — figure N for question N.
 from __future__ import annotations
 
 import base64
+import logging
 import mimetypes
 import re
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
@@ -99,13 +102,16 @@ def _pdf_caption_figures(report: Path) -> list[dict[str, Any]]:
     try:
         import pypdf
     except ImportError:
+        logger.warning("pypdf is not installed; cannot extract figures from %s", report.name)
         return []
     try:
         reader = pypdf.PdfReader(str(report))
-    except Exception:
+    except Exception as exc:
+        logger.warning("could not open PDF %s for figure extraction: %s", report.name, exc)
         return []
     pages_text: list[str] = []
     label_to_image: dict[str, Any] = {}
+    images_failed = False  # log the recurring per-page failure (e.g. Pillow missing) only once
     for page in reader.pages:
         try:
             text = page.extract_text() or ""
@@ -115,7 +121,15 @@ def _pdf_caption_figures(report: Path) -> list[dict[str, Any]]:
         labels = [_label_of(match) for match in _LABEL_REF.finditer(text)]
         try:
             page_images = list(page.images)
-        except Exception:
+        except Exception as exc:
+            if not images_failed:
+                logger.warning(
+                    "image extraction from %s failed — figures will be missing "
+                    "(if this is 'pillow is required', run: pip install pillow): %s",
+                    report.name,
+                    exc,
+                )
+                images_failed = True
             page_images = []
         for offset, image in enumerate(page_images):
             label = labels[offset] if offset < len(labels) else (labels[-1] if labels else None)

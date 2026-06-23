@@ -52,6 +52,8 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
 - **Figure resolver** (`figures.py`) — Q-numbered files → reference tokens → **PDF
   appendix figures matched by the per-section Figure/Appendix reference** (number *or*
   letter, content-matched, not by position). Heuristic; prefers nothing over a wrong figure.
+  PDF image extraction **requires Pillow** — declared as `pypdf[image]` in `pyproject.toml`
+  (see Lessons; a bare `pypdf` install silently extracts no images).
 - **Standardized prompts** — one canonical `prompts/replication.md` + `robustness.md` for
   *all* projects (LoveSmarter repointed off its old bespoke prompts). Robustness has the
   `{mode:discuss}`/`{mode:nodiscuss}` interactive discuss→lock flow; both stages end with a
@@ -69,6 +71,21 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
   isolation) and a **convention gap** — it ignored `raw/Q<n>_summary.json`, used a
   monolithic script, and named figures `visual_q<n>.png`. We tightened the prompt + added
   the verify turn; whether to also add an import-time normalizer is still open.
+- **Pillow is required for PDF figures, and its absence was invisible.** Origin figures
+  showed "No figures" because the venv had `pypdf` but not Pillow, so `page.images` raised
+  `ImportError: pillow is required…` — which `figures.py` swallowed in a broad
+  `except Exception`, making a missing dependency look identical to a figure-less PDF. Fix:
+  `pypdf[image]` in `pyproject.toml` (auto-installs Pillow on `pip install -e .`). Broad
+  `except Exception` around optional-dependency calls hides setup problems — log or narrow.
+- **Big responses + fast clicking = BrokenPipe spam.** Once figures inline as base64, the
+  `/api/compare` payload is large; clicking through questions quickly makes the browser
+  cancel in-flight requests, and the server's write hit a closed socket. The generic
+  `except Exception` then tried to send an *error* response over the same dead socket,
+  double-faulting into the server loop. Fix: `_send`/`_send_pdf` swallow `ConnectionError`.
+- **pypdf xref warnings are benign and now filtered.** `Ignoring wrong pointing object N 0`
+  is a recoverable cross-reference quirk in some PDFs (figures still extract). `serve()`
+  installs a logging filter on `pypdf._reader` that drops *only* that message — every other
+  pypdf warning, and all errors/exceptions, still surface.
 
 ## Open / next
 
@@ -78,6 +95,13 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
 - **Figure caption-matching is heuristic** — calibrate against a real LoveSmarter-style
   report (it nailed MovieRatings; reports whose captions don't restate the question match
   less well). PDF figures live only in `ORIGIN_REPORT.pdf` for MovieRatings.
+- **Observed in the test1 Review (screenshot 2026-06-23):** (a) origin **Figures** showed
+  "No figures" — **RESOLVED**: root cause was missing **Pillow** (not pypdf); the resolver's
+  broad `except` hid the `ImportError`. Fixed via `pypdf[image]` in `pyproject.toml` (see
+  Lessons). (b) validator **Full report** shows "No report section for this question" — the
+  Gemini test1 report isn't in DYFA `## Q<n>` sections, so `_markdown_section` finds nothing.
+  Resolves on the rerun with the standardized DYFA prompt; for non-conforming reports, this
+  is the case the import-time normalizer (above) would handle.
 - Minor: orphaned old LoveSmarter prompts (`STAGE1_REPLICATION_PROMPT.md`,
   `METHOD_FREE_PROMPT.md`, `CODEX_PROMPT.md`, …) are safe to delete. Optional: color stat
   *names* (`p`, `chi-square`) in narratives, not just values.

@@ -278,6 +278,15 @@ grade on its own. Any question missing a section in any document is flagged as a
 same-origin endpoint and embedded in an iframe (the browser's native PDF viewer), so
 the operator can read the source of truth in place.
 
+**Figure resolution.** Per question, the resolver (`figures.py`) tries, in order:
+standalone image files carrying the question number, then images referenced by token in
+the question text, then — when no image files exist — the matching figure from the origin
+report's PDF appendix, paired to its per-section `Figure`/`Appendix` reference (by number
+or letter, content-matched, never by position). Extracting images embedded in a PDF
+**requires Pillow**, so the PDF dependency is declared as `pypdf[image]`; without Pillow,
+`pypdf`'s image access raises and the appendix branch yields nothing (figures sourced from
+image files on disk are unaffected).
+
 **Methodology drafting.** A result-free generation prompt (`OG_METHODOLOGY_PROMPT.md`)
 is rendered with the study's questions, held constants, and report filename. The
 operator sends it to the origin model (or an origin-author stand-in), pastes the
@@ -358,6 +367,13 @@ comparison, and narratives), `/api/grading` (per-run verdict state), `/api/score
 `/api/project/select`, `/api/project/create`, `/api/origin/methodology`,
 `/api/grading/verdict`, `/api/grading/finalize`, `/api/grading/reopen`,
 `/api/grading/delete`, `/api/scorecard/delete`.
+
+**Connection and log hygiene.** Figure payloads are inlined as base64, so `/api/compare`
+responses can be large; if the browser cancels an in-flight request (e.g. clicking
+through questions quickly), the write target disappears. Response writers swallow
+`ConnectionError` so a dropped client doesn't surface as a traceback. Separately, `serve()`
+installs a logging filter that drops pypdf's benign `Ignoring wrong pointing object`
+cross-reference warnings while leaving every other pypdf warning and all errors intact.
 
 ---
 
