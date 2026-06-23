@@ -134,9 +134,12 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
   Gemini test1 report isn't in DYFA `## Q<n>` sections, so `_markdown_section` finds nothing.
   Resolves on the rerun with the standardized DYFA prompt; for non-conforming reports, this
   is the case the import-time normalizer (above) would handle.
-- Minor: orphaned old LoveSmarter prompts (`STAGE1_REPLICATION_PROMPT.md`,
-  `METHOD_FREE_PROMPT.md`, `CODEX_PROMPT.md`, …) are safe to delete. Optional: color stat
-  *names* (`p`, `chi-square`) in narratives, not just values.
+- Minor: **DONE (2026-06-23)** — the three orphaned LoveSmarter prompts
+  (`STAGE1_REPLICATION_PROMPT.md`, `METHOD_FREE_PROMPT.md`, `CODEX_PROMPT.md`) were moved out
+  of `prompts/` to `operator/archive/retired_prompts/` (superseded by standardized
+  `replication.md`/`robustness.md`; zero references in code/config; historical provenance
+  logs still point at the old monorepo path and were intentionally left untouched). Still
+  optional: color stat *names* (`p`, `chi-square`) in narratives, not just values.
 - **Then actually run the pipeline** for LoveSmarter: build → dispatch zip → run isolated →
   `rrg import` → Review & Grade → finalize scorecards.
 
