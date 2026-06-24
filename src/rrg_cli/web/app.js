@@ -59,10 +59,16 @@ async function busy(button,label,work){const prior=button.textContent;button.dis
 function applyData(data){DATA=data;document.getElementById('project-name').textContent=DATA.project;document.getElementById('project-root').textContent=DATA.root}
 async function refresh(){applyData(await api('/api/bootstrap'));applyHashView();render()}
 function render(){({dashboard:renderDashboard,setup:renderSetup,convert:renderConvert,build:renderBuild,prompts:renderPrompts,runs:renderRuns,review:renderReview,origin:renderOrigin,files:renderExplorer,guide:renderGuide,projects:renderProjects}[VIEW]||renderDashboard)()}
-function knownViews(){return Array.from(document.querySelectorAll('nav button')).map(button=>button.dataset.view)}
-function applyHashView(){const target=location.hash.slice(1);VIEW=knownViews().includes(target)?target:'dashboard';document.querySelectorAll('nav button').forEach(button=>button.classList.toggle('active',button.dataset.view===VIEW))}
-function activateView(view){VIEW=view;document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===view));history.replaceState(null,'','#'+view);render()}
-document.querySelectorAll('nav button').forEach(button=>button.addEventListener('click',()=>activateView(button.dataset.view)));
+function knownViews(){return Array.from(document.querySelectorAll('nav button[data-view]')).map(button=>button.dataset.view)}
+function closeNavMenus(){document.querySelectorAll('nav .navgroup[open]').forEach(group=>{group.open=false})}
+function setNavActive(view){
+  document.querySelectorAll('nav button[data-view]').forEach(item=>item.classList.toggle('active',item.dataset.view===view));
+  document.querySelectorAll('nav .navgroup').forEach(group=>group.classList.toggle('active',!!group.querySelector('button.active')));
+}
+function applyHashView(){const target=location.hash.slice(1);VIEW=knownViews().includes(target)?target:'dashboard';setNavActive(VIEW)}
+function activateView(view){VIEW=view;setNavActive(view);closeNavMenus();history.replaceState(null,'','#'+view);render()}
+document.querySelectorAll('nav button[data-view]').forEach(button=>button.addEventListener('click',()=>activateView(button.dataset.view)));
+document.addEventListener('click',event=>{if(!event.target.closest('nav .navgroup'))closeNavMenus()});
 window.addEventListener('hashchange',()=>{if(location.hash.slice(1)!==VIEW){applyHashView();render()}});
 
 function renderProjects(){

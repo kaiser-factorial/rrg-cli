@@ -12,16 +12,22 @@
     <div class="brand"><span class="mark">RRG</span><div><h1 id="project-name">Validation pipeline</h1><p id="project-root"></p></div></div>
     <nav aria-label="Workflow">
       <button data-view="dashboard" class="active">Dashboard</button>
-      <button data-view="convert">Convert</button>
-      <button data-view="build">Build</button>
-      <button data-view="prompts">Prompts</button>
-      <button data-view="runs">Runs</button>
-      <button data-view="review">Review &amp; Grade</button>
-      <button data-view="origin">Origin</button>
-      <button data-view="files">Files</button>
+      <details class="navgroup"><summary>Study</summary><div class="navmenu">
+        <button data-view="setup">Setup</button>
+        <button data-view="convert">Convert</button>
+        <button data-view="origin">Origin</button>
+      </div></details>
+      <details class="navgroup"><summary>Validate</summary><div class="navmenu">
+        <button data-view="build">Build</button>
+        <button data-view="prompts">Prompts</button>
+        <button data-view="runs">Runs</button>
+      </div></details>
+      <details class="navgroup"><summary>Review</summary><div class="navmenu">
+        <button data-view="review">Review &amp; Grade</button>
+        <button data-view="files">Files</button>
+      </div></details>
       <button data-view="guide" class="utility">Guide</button>
       <button data-view="projects">Projects</button>
-      <button data-view="setup">Setup</button>
     </nav>
   </header>
   <main id="app" aria-live="polite"><div class="card loading">Loading project…</div></main>
