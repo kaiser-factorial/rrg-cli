@@ -68,7 +68,8 @@ function setNavActive(view){
 function applyHashView(){const target=location.hash.slice(1);VIEW=knownViews().includes(target)?target:'dashboard';setNavActive(VIEW)}
 function activateView(view){VIEW=view;setNavActive(view);closeNavMenus();history.replaceState(null,'','#'+view);render()}
 document.querySelectorAll('nav button[data-view]').forEach(button=>button.addEventListener('click',()=>activateView(button.dataset.view)));
-document.addEventListener('click',event=>{if(!event.target.closest('nav .navgroup'))closeNavMenus()});
+document.querySelectorAll('nav .navgroup').forEach(group=>group.addEventListener('toggle',()=>{if(group.open)document.querySelectorAll('nav .navgroup[open]').forEach(other=>{if(other!==group)other.open=false})}));
+document.addEventListener('click',event=>{if(!event.target.closest('nav .navgroup'))closeNavMenus()},true);
 window.addEventListener('hashchange',()=>{if(location.hash.slice(1)!==VIEW){applyHashView();render()}});
 
 function renderProjects(){
