@@ -154,6 +154,38 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
   `PYTHONPATH=src python3 -m pytest`. Missing `pyarrow`/`pyreadstat` show up as parquet/preflight
   `ImportError`s, not real failures. On the Mac, just use `.venv/bin/python` as usual.
 
+## Agentic CLI foundation (2025-08-10)
+
+The CLI is now the primary interface (GUI parked). Four new modules + commands:
+
+- **`rrg prefs`** — per-project saved defaults (`.rrg_prefs.yaml`, gitignored).
+  Keys: `executor` (manual/hermes/openrouter/prime-agent), `mode`
+  (discuss/nodiscuss/agent), `skip_normalize`, `auto_import`.
+  `rrg prefs --set executor=hermes` / `rrg prefs --reset` / `rrg prefs` (view).
+
+- **`rrg dispatch`** — one-command round-trip: `build_package` → `render_prompt`
+  → executor → `import_run` (with auto-normalize). Flags override prefs.
+  `--executor manual` prints zip path + turns + instructions.
+  `--executor hermes` shells out to `hermes run --model {slug}`.
+  `--executor openrouter` calls the OpenRouter API directly.
+  `--executor prime-agent` spawns a subagent (requires async IPython context).
+  `--mode agent` generates built-in operator responses for discuss turns.
+  `--reuse` skips build if a matching package exists. `--dry-run` lints only.
+
+- **`rrg import --skip-normalize`** — import now auto-normalizes non-conforming
+  returns (fuzzy-matches Q-numbered files, creates missing `raw/Q<n>_summary.json`
+  from text output, preserves originals). `--skip-normalize` opts out.
+
+- **`rrg wizard`** — 5-step interactive walkthrough (health → conversion →
+  preflight → roster → dispatch). `--non-interactive` for agent/CI.
+  `--prefs` for interactive prefs editor. `--step N` to jump to a step.
+
+- **`rrg intake --check`** — reports whether origin intake is needed (checks
+  if SUMMARY.md already has all Q sections).
+
+New modules: `prefs.py`, `dispatch.py`, `normalize.py`, `wizard.py`.
+Tests: 128 passing (80 existing + 48 new).
+
 ## Open / next
 
 - **Validator-compliance**: the prompt is now strict + has a verify turn, but a model can
