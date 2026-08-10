@@ -1,5 +1,11 @@
 # HANDOFF — RRG
 
+> **▶ Read `docs/PHASES.md` first — 2026-06-26 scope refit.** RRG is in a deliberate
+> **engine feature freeze**: *no new engine feature unless a real run demanded it* (run over
+> build). The **Open / next** list below is the build backlog, now **gated** behind running the
+> pipeline for real — don't start building from it without checking that stance. Advisor-meeting
+> prep (the immediate next move, not a build): `docs/ADVISOR_MEETING.md`.
+
 *Continuity brief for a future session. Read this, then `SPEC.md` (full spec) and the ADRs:
 `docs/adr/0001-validator-isolation.md` (zip delivery + import) and
 `docs/adr/0002-roundtrip-run-identity-and-archival.md` (run_id, breach guard, archive —
@@ -179,6 +185,17 @@ a cartridge (`study.yaml`) + engine config (`rrg.yaml`). Full detail in `SPEC.md
   → Review & Grade → finalize scorecards. Per the user, the existing pre-ADR-0002 LoveSmarter
   runs will be **re-run under the new scheme and the old ones moved into `_archive/` by hand**
   (no migration code — confirmed in ADR 0002).
+- **Pipeline eval harness — designed, not built. See `docs/eval-harness-brief.md`.** Evaluates
+  the *pipeline itself* (process + outcomes as a tool), distinct from the scientific eval of an
+  origin paper. **MovieRatings is the pipeline's test fixture** (shake-out set); **RMP capstone
+  is the real pipeline test set** once MovieRatings is dialed in. Two tracks: (1) RRG **auto-
+  metrics** — `rrg eval --run <path>` deriving process/outcome signals from artifacts RRG already
+  emits (`provenance_log.jsonl`, `*.breach.json`, grading state, deliverable-contract presence);
+  (2) a **standalone, RRG-agnostic voice process-logger** (NOT in the GUI — a desktop STT utility,
+  ideally local Whisper, writing timestamped transcripts to `Projects/voice_logs/`) so the
+  operator narrates their process out loud and any model session reads the folder back. The
+  immediate Gemini test run is on **MovieRatings** (chosen this session) and is the harness's
+  first real input.
 
 ## Tests
 

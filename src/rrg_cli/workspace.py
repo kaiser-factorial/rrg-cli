@@ -230,6 +230,27 @@ class WorkspaceState:
     def delete_scorecard(self, *args, **kwargs):
         return self._call("delete_scorecard", *args, **kwargs)
 
+    def acknowledge_breach(self, *args, **kwargs):
+        return self._call("acknowledge_breach", *args, **kwargs)
+
+    def list_archive(self, *args, **kwargs):
+        return self._call("list_archive", *args, **kwargs)
+
+    def archive_item(self, *args, **kwargs):
+        return self._call("archive_item", *args, **kwargs)
+
+    def restore_archived(self, *args, **kwargs):
+        return self._call("restore_archived", *args, **kwargs)
+
+    def purge_archived(self, *args, **kwargs):
+        return self._call("purge_archived", *args, **kwargs)
+
+    def file_tree(self, *args, **kwargs):
+        return self._call("file_tree", *args, **kwargs)
+
+    def tree_file(self, *args, **kwargs):
+        return self._call("tree_file", *args, **kwargs)
+
     def scorecard_content(self, *args, **kwargs):
         return self._call("scorecard_content", *args, **kwargs)
 

@@ -122,6 +122,10 @@ def make_handler(project: Project, token: str | None = None, workspace: str | No
                     return self._json({"runs": state.runs()})
                 if path == "/api/archive":
                     return self._json(state.list_archive())
+                if path == "/api/tree":
+                    return self._json(state.file_tree(query.get("xray") == "1"))
+                if path == "/api/tree/file":
+                    return self._json(state.tree_file(query.get("path", ""), query.get("xray") == "1"))
                 if path == "/api/run":
                     return self._json(state.run_detail(query.get("run", "")))
                 if path == "/api/file":
