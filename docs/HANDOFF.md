@@ -20,13 +20,16 @@ Everything is now under **`rrg-cli/`** (its own git repo → `kaiser-factorial/r
 - `src/rrg_cli/` — the engine (CLI + local GUI). `tests/` — pytest suite. `docs/` — this
   file, `SPEC.md` lives at the repo root, ADRs in `docs/adr/`.
 - `examples/MovieRatings/` — committed, runnable demo project.
-- `.venv/` — the project venv (gitignored). Use Python 3.13 (3.14's `ensurepip` is broken).
-  Note: the venv's `python`/`python3` symlinks point at a broken `python3.14`; `rrg` and
-  `pip` work because their shebangs hardcode `python3.13`, but a bare `.venv/bin/python`
-  fails — repoint those two symlinks to `python3.13` when convenient.
+- `.venv/` — the project venv (gitignored), recreated 2025-08-10 with Python 3.13.9.
+  The old venv was created at a different path (`LS_Lab/RRG_root/...`) and had broken
+  python3.14 symlinks; it was nuked and rebuilt from scratch at the current location.
+  `python3.13 -m venv .venv && .venv/bin/pip install -e '.[dev]'` reproduces it.
 - `workspace/` — **gitignored**; the live GUI workspace holding the real studies:
   - `LoveSmarter/` — the real study (consolidated: `rrg.yaml`, `study.yaml`, `prompts/`,
-    `data/`, `operator/`, `shared/` all in one self-contained project).
+    `data/`, `operator/`, `shared/` all in one self-contained project). `rrg.yaml` was migrated
+    to the v1 schema (2025-08-10): dict-of-dicts stages, `enabled`/`blocked_reason`, `prompt`
+    (not `prompt_doc`), `exclude_vendors` (not `exclude_as_validator`), `model_slugs` (not
+    `openrouter`), added `exclude_globs` to `result_token_scan`, dropped legacy advisory fields.
   - `MovieRatings/` — working copy of the demo.
   - `experiments/` — test-run transcripts (e.g. `gemini_test1_MovieRatings/`).
 
@@ -40,8 +43,8 @@ holds grading state plus per-run `*.breach.json` records.
 roster, re-runs needed, open scientific decisions. Read that for the science.
 
 **Run the GUI:** `cd rrg-cli && .venv/bin/rrg gui --workspace workspace --open`
-(after `.venv/bin/pip install -e .`). Static assets reload on browser refresh; Python
-changes need a server restart.
+(GUI is parked for the agentic phase — CLI is the primary interface now). Static assets
+reload on browser refresh; Python changes need a server restart.
 
 ## What RRG does (one paragraph)
 
