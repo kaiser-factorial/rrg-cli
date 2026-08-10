@@ -190,6 +190,7 @@ def import_run(
     *,
     label: str | None = None,
     run_id: str | None = None,
+    normalize: bool = True,
 ) -> dict[str, Any]:
     if source is None:
         raise RRGError("a returned folder or .zip is required")
@@ -252,6 +253,12 @@ def import_run(
         ran_inside_project=breach["ran_inside_project"],
     )
 
+    # Auto-normalize non-conforming returns (unless skipped).
+    normalize_result: dict[str, Any] | None = None
+    if normalize:
+        from .normalize import normalize_run
+        normalize_result = normalize_run(project, destination)
+
     return {
         "run": run_value,
         "output_folder": str(destination),
@@ -262,4 +269,5 @@ def import_run(
         "imported": sorted(imported),
         "count": len(imported),
         "breach": breach,
+        "normalize": normalize_result,
     }

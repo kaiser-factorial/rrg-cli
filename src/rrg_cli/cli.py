@@ -102,6 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     importer.add_argument("--model", help="optional; auto-resolved from the RRG_RUN.txt marker when omitted")
     importer.add_argument("--label")
     importer.add_argument("--run-id", dest="run_id", help="target a specific build's run folder (ADR 0002)")
+    importer.add_argument("--skip-normalize", action="store_true", help="skip auto-normalization of returned output")
     importer.add_argument("--json", action="store_true")
 
     ack = sub.add_parser(
@@ -168,6 +169,35 @@ def build_parser() -> argparse.ArgumentParser:
     gui.add_argument("--port", type=int, default=8765)
     gui.add_argument("--open", action="store_true")
 
+    prefs_cmd = sub.add_parser("prefs", help="view or set user preferences")
+    _add_project_args(prefs_cmd)
+    prefs_cmd.add_argument("--set", metavar="KEY=VALUE", action="append", help="set a preference (e.g. --set executor=hermes)")
+    prefs_cmd.add_argument("--reset", action="store_true", help="reset preferences to defaults")
+    prefs_cmd.add_argument("--json", action="store_true")
+
+    dispatch_cmd = sub.add_parser("dispatch", help="build, run, and import a validation package in one step")
+    _add_project_args(dispatch_cmd)
+    dispatch_cmd.add_argument("--stage", required=True)
+    dispatch_cmd.add_argument("--model", required=True)
+    dispatch_cmd.add_argument("--executor", choices=["manual", "hermes", "openrouter", "prime-agent"],
+                              default=None, help="executor (default: from prefs or manual)")
+    dispatch_cmd.add_argument("--mode", choices=["discuss", "nodiscuss", "agent"],
+                              default=None, help="prompt mode (default: from prefs or discuss)")
+    dispatch_cmd.add_argument("--label")
+    dispatch_cmd.add_argument("--dry-run", action="store_true")
+    dispatch_cmd.add_argument("--reuse", action="store_true", help="reuse an existing package if one exists")
+    dispatch_cmd.add_argument("--skip-normalize", action="store_true")
+    dispatch_cmd.add_argument("--no-auto-import", action="store_true")
+    dispatch_cmd.add_argument("--force", action="store_true")
+    dispatch_cmd.add_argument("--json", action="store_true")
+
+    wizard_cmd = sub.add_parser("wizard", help="interactive setup and dispatch walkthrough")
+    _add_project_args(wizard_cmd)
+    wizard_cmd.add_argument("--non-interactive", action="store_true", help="run all steps without prompting")
+    wizard_cmd.add_argument("--step", type=int, default=None, help="run up to this step (1-5)")
+    wizard_cmd.add_argument("--prefs", action="store_true", help="interactive prefs editor")
+    wizard_cmd.add_argument("--json", action="store_true")
+
     sub.add_parser("version", help="print the installed version")
     return parser
 
@@ -220,7 +250,8 @@ def run(args: argparse.Namespace) -> int:
         return 0 if report.passed else 2
     if args.command == "import":
         result = import_run(
-            project, args.stage, args.model, args.source, label=args.label, run_id=args.run_id
+            project, args.stage, args.model, args.source, label=args.label, run_id=args.run_id,
+            normalize=not args.skip_normalize,
         )
         how = " (auto-resolved from RRG_RUN.txt)" if result.get("auto_resolved") else ""
         breach = result.get("breach") or {}
@@ -356,10 +387,95 @@ def run(args: argparse.Namespace) -> int:
         else:
             print(rendered["text"])
         return 0
+    if args.command == "prefs":
+        from .prefs import load_prefs, save_prefs, reset_prefs, DEFAULTS
+        if args.reset:
+            reset_prefs(project)
+            _emit({"prefs": dict(DEFAULTS)}, args.json) if args.json else print("Reset to defaults.")
+            return 0
+        if args.set:
+            for item in args.set:
+                if "=" not in item:
+                    raise RRGError(f"invalid --set value (expected KEY=VALUE): {item}")
+                key, value = item.split("=", 1)
+                key = key.strip()
+                if key in ("skip_normalize", "auto_import"):
+                    value = value.lower() in ("true", "yes", "1")
+                save_prefs(project, {key: value})
+            prefs = load_prefs(project)
+            _emit({"prefs": prefs}, args.json) if args.json else print("Saved.")
+            return 0
+        prefs = load_prefs(project)
+        if args.json:
+            _emit({"prefs": prefs}, True)
+        else:
+            print("RRG Preferences:")
+            for key, value in prefs.items():
+                print(f"  {key}: {value}")
+        return 0
+    if args.command == "dispatch":
+        from .dispatch import dispatch
+        result = dispatch(
+            project, args.stage, args.model,
+            executor=args.executor, mode=args.mode, label=args.label,
+            dry_run=args.dry_run, reuse=args.reuse,
+            skip_normalize=args.skip_normalize or None,
+            auto_import=None if not args.no_auto_import else False,
+            force=args.force,
+        )
+        if args.json:
+            _emit(result, True)
+        else:
+            _print_dispatch_result(result)
+        return 2 if result["package"].get("blocked") else 0
+    if args.command == "wizard":
+        from .wizard import run_wizard
+        result = run_wizard(project, non_interactive=args.non_interactive,
+                            step=args.step, prefs_editor=args.prefs)
+        if args.json:
+            _emit(result, True)
+        return 0
     if args.command == "gui":
         serve(project, args.port, open_browser=args.open)
         return 0
     raise RRGError(f"unknown command: {args.command}")
+
+
+def _print_dispatch_result(result):
+    pkg = result["package"]
+    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['executor']} executor")
+    if pkg.get("blocked"):
+        print("  \u2717 Package blocked by blinding lint")
+        return
+    print(f"  Run ID: {pkg.get('run_id', '\u2014')}")
+    if result.get("zip_path") and Path(result["zip_path"]).exists():
+        print(f"  Package zip: {result['zip_path']}")
+    prompt = result.get("prompt")
+    if prompt:
+        print(f"  Prompt: {len(prompt['turns'])} turn(s)")
+        for i, t in enumerate(prompt["turns"], 1):
+            print(f"    Turn {i} \u2014 {t['title']}")
+    if result.get("conversation"):
+        print(f"  Conversation: {len(result['conversation'])} exchange(s)")
+    if result.get("import_result"):
+        imp = result["import_result"]
+        print(f"  Imported: {imp['count']} files into {imp['run']}")
+        breach = imp.get("breach", {})
+        if breach.get("copied_secrets"):
+            print(f"  \u26a0 BLINDING BREACH: {len(breach['copied_secrets'])} file(s) match the answer key")
+        if imp.get("normalize"):
+            norm = imp["normalize"]
+            if norm.get("files_moved"):
+                print(f"  Normalized: {len(norm['files_moved'])} file(s) renamed")
+            if norm.get("summary_json_created"):
+                qs = ", ".join(f"Q{q}" for q in norm["summary_json_created"])
+                print(f"  Normalized: created summary.json for {qs}")
+            if norm.get("missing"):
+                qs = ", ".join(f"Q{q}" for q in norm["missing"])
+                print(f"  \u26a0 Missing: {qs}")
+    elif result.get("instructions"):
+        print()
+        print(result["instructions"])
 
 
 def main(argv: list[str] | None = None) -> int:

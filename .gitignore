@@ -9,3 +9,4 @@ __pycache__/
 /workspace/
 .env
 docs/ADVISOR_MEETING.md
+.rrg_prefs.yaml
