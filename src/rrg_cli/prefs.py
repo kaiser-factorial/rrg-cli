@@ -24,6 +24,12 @@ DEFAULTS: dict[str, Any] = {
     "auto_import": True,         # auto-import after dispatch completes?
 }
 
+# Known pref keys (for validation in CLI/TUI)
+PREF_KEYS: tuple[str, ...] = ("executor", "mode", "skip_normalize", "auto_import")
+
+EXECUTOR_OPTIONS: tuple[str, ...] = ("manual", "hermes", "openrouter", "prime-agent")
+MODE_OPTIONS: tuple[str, ...] = ("discuss", "nodiscuss", "agent")
+
 
 def _prefs_path(project: Project) -> Path:
     return project.root / PREFS_FILENAME

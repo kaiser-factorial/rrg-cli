@@ -162,6 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_project_args(intake)
     intake.add_argument("--apply", metavar="FILE", help="apply a returned intake file (writes SUMMARY.md, renames figures)")
     intake.add_argument("--check", action="store_true", help="check whether intake is needed (reports missing sections)")
+    intake.add_argument("--simplified", action="store_true", help="use simplified intake (no figure_map; normalizer handles figures)")
     intake.add_argument("--json", action="store_true")
 
     gui = sub.add_parser("gui", help="launch the local status GUI")
@@ -198,6 +199,17 @@ def build_parser() -> argparse.ArgumentParser:
     wizard_cmd.add_argument("--step", type=int, default=None, help="run up to this step (1-5)")
     wizard_cmd.add_argument("--prefs", action="store_true", help="interactive prefs editor")
     wizard_cmd.add_argument("--json", action="store_true")
+
+    eval_cmd = sub.add_parser("eval", help="evaluate a run for pipeline metrics (deliverable contract + breach + grading)")
+    _add_project_args(eval_cmd)
+    eval_cmd.add_argument("--run", required=True, help="run folder path (relative to project root)")
+    eval_cmd.add_argument("--json", action="store_true")
+
+    tui_cmd = sub.add_parser("tui", help="launch the interactive terminal UI")
+    _add_project_args(tui_cmd)
+    tui_cmd.add_argument("--step", type=int, default=None, help="run up to this step (1-5)")
+    tui_cmd.add_argument("--prefs", action="store_true", help="interactive prefs editor")
+    tui_cmd.add_argument("--eval", metavar="RUN", default=None, help="eval a run with rich output")
 
     sub.add_parser("version", help="print the installed version")
     return parser
@@ -446,6 +458,24 @@ def run(args: argparse.Namespace) -> int:
                             step=args.step, prefs_editor=args.prefs)
         if args.json:
             _emit(result, True)
+        return 0
+    if args.command == "eval":
+        from .eval_lite import eval_run
+        run_path = project.path(args.run)
+        result = eval_run(project, run_path)
+        if args.json:
+            _emit(result, True)
+        else:
+            print(result["report"])
+        return 0
+    if args.command == "tui":
+        from .tui import run_tui, run_tui_prefs, run_tui_eval
+        if args.prefs:
+            run_tui_prefs(project)
+        elif args.eval:
+            run_tui_eval(project, args.eval)
+        else:
+            run_tui(project, step=args.step)
         return 0
     if args.command == "gui":
         serve(project, args.port, open_browser=args.open)

@@ -16,15 +16,14 @@ from .doctor import inspect_project
 from .errors import RRGError
 from .prefs import (
     DEFAULTS,
+    EXECUTOR_OPTIONS,
+    MODE_OPTIONS,
+    PREF_KEYS,
     load_prefs,
     save_prefs,
     reset_prefs,
 )
 from .project import Project
-
-PREF_KEYS = ("executor", "mode", "skip_normalize", "auto_import")
-EXECUTOR_OPTIONS = ("manual", "hermes", "openrouter", "prime-agent")
-MODE_OPTIONS = ("discuss", "nodiscuss", "agent")
 
 
 def _check_health(project: Project) -> dict[str, Any]:

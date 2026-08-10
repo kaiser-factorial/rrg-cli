@@ -307,3 +307,112 @@ def test_simplify_intake_needed_when_no_summary(ready_project: Project) -> None:
     from rrg_cli.origin import check_intake_needed
     result = check_intake_needed(ready_project)
     assert result["needed"] is True
+
+
+
+# --- Simplified intake prompt ---
+
+def test_simplified_intake_prompt_renders(ready_project: Project) -> None:
+    """The simplified intake prompt renders without error."""
+    from rrg_cli.origin import simplified_intake_prompt
+    result = simplified_intake_prompt(ready_project)
+    assert result["simplified"] is True
+    assert "text" in result
+    assert len(result["text"]) > 0
+    # Should NOT contain figure_map instructions
+    assert "figure_map" not in result["text"]
+
+
+def test_simplified_intake_prompt_has_questions(ready_project: Project) -> None:
+    """The simplified intake prompt includes the questions list."""
+    from rrg_cli.origin import simplified_intake_prompt
+    result = simplified_intake_prompt(ready_project)
+    # The starter project has 3 questions
+    assert "1." in result["text"] or "Q1" in result["text"]
+
+
+def test_save_simplified_intake_writes_summary(ready_project: Project) -> None:
+    """save_simplified_intake writes SUMMARY.md without requiring figure_map."""
+    from rrg_cli.origin import save_simplified_intake, _summary_path
+    # Simulate a returned intake (just SUMMARY content, no figure_map)
+    text = """## Q1 - Test question
+
+- **question**: What is the answer?
+- **n**: 100
+- **test**: t-test
+- **statistic**: 2.5
+- **p_value**: 0.01
+- **effect_size**: 0.3
+- **conclusion**: Significant.
+
+## Q2 - Second question
+
+- **question**: Another question?
+- **n**: 50
+- **test**: chi-square
+- **statistic**: 10.3
+- **p_value**: 0.002
+- **effect_size**: 0.4
+- **conclusion**: Also significant.
+
+## Q3 - Third question
+
+- **question**: Third question?
+- **n**: 75
+- **test**: regression
+- **statistic**: 5.1
+- **p_value**: 0.03
+- **effect_size**: 0.2
+- **conclusion**: Marginal.
+"""
+    result = save_simplified_intake(ready_project, text)
+    assert result["simplified"] is True
+    assert "summary_written" in result
+    summary = _summary_path(ready_project)
+    assert summary.exists()
+    content = summary.read_text()
+    assert "## Q1" in content
+    assert "## Q2" in content
+    assert "## Q3" in content
+
+
+def test_save_simplified_intake_strips_figure_map(ready_project: Project) -> None:
+    """save_simplified_intake strips any stray figure_map block."""
+    from rrg_cli.origin import save_simplified_intake, _summary_path
+    text = """## Q1 - Test
+
+- **question**: What?
+- **n**: 100
+- **test**: t-test
+- **statistic**: 2.5
+- **p_value**: 0.01
+- **conclusion**: Significant.
+
+## Q2 - Second
+
+- **question**: Another?
+- **n**: 50
+- **test**: chi-square
+- **statistic**: 10.3
+- **p_value**: 0.002
+- **conclusion**: Significant.
+
+## Q3 - Third
+
+- **question**: Third?
+- **n**: 75
+- **test**: regression
+- **statistic**: 5.1
+- **p_value**: 0.03
+- **conclusion**: Marginal.
+
+```yaml
+figure_map:
+  - {question: 1, report_label: "Figure 1", canonical: "Q1_fig.png"}
+```
+"""
+    result = save_simplified_intake(ready_project, text)
+    summary = _summary_path(ready_project)
+    content = summary.read_text()
+    assert "figure_map" not in content
+    assert "## Q1" in content

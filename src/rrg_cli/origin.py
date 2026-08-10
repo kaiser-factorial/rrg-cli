@@ -572,3 +572,92 @@ Match figures to questions by content, not position. If unsure, omit that row.
 - Honor the held constants in `{HELD_CONSTANTS_FILE}` ({HELD_CONSTANTS_SUMMARY}).
 - Output only the two artifacts above. No preamble, no commentary.
 """
+
+SIMPLIFIED_INTAKE_PROMPT = """# Origin intake (simplified) — {STUDY_TITLE}
+
+You are transcribing the original report `{ORIGIN_REPORT}` for this study into
+the canonical format the validation pipeline consumes. You are given the
+{N_QUESTIONS} validation questions below. Produce a **faithful, structured
+transcription** of what the report already says for each question.
+
+## Validation questions
+
+{QUESTIONS_LIST}
+
+## What to produce
+
+Output GitHub-flavored markdown. Write exactly one section per question, in
+order, each headed `## Q<n> - <topic>`, where `<n>` is the question number
+exactly as shown in the list above (this is the report's own numbering). Under
+each heading, give a fixed field list:
+
+- **question** — the question text, verbatim from the list above.
+- **n** — the analysis N the report used for this question.
+- **groups** — how cases were split or grouped (definitions only).
+- **test** — the exact test and its alternative/direction.
+- **statistic** — the reported test statistic with its label.
+- **p_value** — the reported p, exactly as printed. Never round a small p to 0.
+  If the report states two conflicting p-values, record BOTH and do not reconcile.
+- **effect_size** — the reported effect size, or `null` if none.
+- **conclusion** — the report's own one-sentence conclusion.
+
+Copy numbers exactly as the report renders them. Transcribe; do not recompute.
+If a field is genuinely absent, write `not reported` — do not infer.
+
+## Rules
+
+- This is a transcription task. Do not analyze, run code, or "fix" the report.
+- Honor the held constants in `{HELD_CONSTANTS_FILE}` ({HELD_CONSTANTS_SUMMARY}).
+- Output only the summary above. No figure map, no preamble, no commentary.
+"""
+
+
+def simplified_intake_prompt(project: Project) -> dict[str, Any]:
+    """Render the simplified intake prompt (no figure_map).
+
+    Use this when the origin report is markdown/text or when the normalizer
+    can handle figure matching from the run folder.
+    """
+    stage = (project.stage_ids() or ["replication"])[0]
+    values = placeholders(project, stage, "Origin-Model")
+    origin_dir = _origin_dir(project)
+    report_path = _find_report(project, origin_dir)
+    summary_path = _summary_path(project)
+    values["ORIGIN_REPORT"] = report_path.name if report_path else "(attach the origin report)"
+    values["STUDY_TITLE"] = str(project.study.get("title", project.name))
+    values["QUESTIONS_LIST"] = _intake_questions_list(project) or "(see {QUESTIONS_FILE})"
+    values["SUMMARY_FILE"] = summary_path.name
+    template = SIMPLIFIED_INTAKE_PROMPT
+    rendered = render_text(template, values, modules(project.study))
+    return {
+        "text": rendered,
+        "source": "(built-in simplified default)",
+        "target": str(summary_path.relative_to(project.root)) if _inside(project.root, summary_path) else str(summary_path),
+        "origin_report": values["ORIGIN_REPORT"],
+        "simplified": True,
+    }
+
+
+def save_simplified_intake(project: Project, text: str) -> dict[str, Any]:
+    """Apply a simplified intake: just write SUMMARY.md (no figure_map).
+
+    The normalizer handles figure matching from the run folder.
+    """
+    if not text.strip():
+        raise RRGError("intake text is empty")
+    # Strip any stray figure_map block if the model included one anyway
+    summary, _ = split_intake(text)
+    if not summary:
+        summary = text.strip()
+    summary_path = _summary_path(project)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(
+        summary if summary.endswith("\n") else summary + "\n",
+        encoding="utf-8",
+    )
+    warnings = intake_warnings(summary, project)
+    return {
+        "summary_written": str(summary_path.relative_to(project.root)) if _inside(project.root, summary_path) else str(summary_path),
+        "warnings": warnings,
+        "simplified": True,
+    }

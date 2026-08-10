@@ -28,6 +28,7 @@ dependencies = [
   "pyreadstat>=1.2; python_version >= '3.10'",
   "pyarrow>=10",
   "pypdf[image]>=4.0",
+  "rich>=13.0",
 ]
 
 [project.optional-dependencies]
