@@ -408,6 +408,45 @@ def intake_warnings(summary: str, project: Project) -> list[dict[str, Any]]:
     return warnings
 
 
+def check_intake_needed(project: Project) -> dict[str, Any]:
+    """Check whether origin intake is needed.
+
+    If the origin SUMMARY.md already has ``## Q<n>`` sections for every question,
+    intake is not needed (the agent can read the summary directly). Otherwise,
+    it reports which questions are missing.
+
+    Returns ``{"needed": bool, "reason": str, "missing": list[int]}``.
+    """
+    summary_path = _summary_path(project)
+    if not summary_path.is_file():
+        return {"needed": True, "reason": "no SUMMARY.md found", "missing": []}
+
+    map_path = project.path(
+        project.study.get("questions", {}).get("map", "questions_map.yaml")
+    )
+    if map_path.is_file():
+        questions = load_question_map(map_path)
+        expected = [entry["original"] for entry in questions]
+    else:
+        count = int(project.study.get("questions", {}).get("count", 0))
+        expected = list(range(1, count + 1))
+
+    summary_text = summary_path.read_text(encoding="utf-8", errors="ignore")
+    missing: list[int] = []
+    for q_num in expected:
+        section = _markdown_section(summary_text, q_num)
+        if not section.strip():
+            missing.append(q_num)
+
+    if not missing:
+        return {"needed": False, "reason": "summary already has all question sections", "missing": []}
+    return {
+        "needed": True,
+        "reason": f"incomplete: missing sections for Q{', Q'.join(str(q) for q in missing)}",
+        "missing": missing,
+    }
+
+
 def save_intake(project: Project, text: str) -> dict[str, Any]:
     if not text.strip():
         raise RRGError("intake text is empty")

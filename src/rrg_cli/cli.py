@@ -161,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_project_args(intake)
     intake.add_argument("--apply", metavar="FILE", help="apply a returned intake file (writes SUMMARY.md, renames figures)")
+    intake.add_argument("--check", action="store_true", help="check whether intake is needed (reports missing sections)")
     intake.add_argument("--json", action="store_true")
 
     gui = sub.add_parser("gui", help="launch the local status GUI")
@@ -366,6 +367,17 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "intake":
         from .origin import intake_prompt, save_intake
 
+        if args.check:
+            from .origin import check_intake_needed
+            result = check_intake_needed(project)
+            if args.json:
+                _emit(result, True)
+            else:
+                if result["needed"]:
+                    print(f"Intake needed: {result['reason']}")
+                else:
+                    print(f"Intake not needed: {result['reason']}")
+            return 0
         if args.apply:
             text = project.path(args.apply).read_text(encoding="utf-8", errors="ignore")
             result = save_intake(project, text)

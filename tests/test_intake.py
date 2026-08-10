@@ -270,3 +270,40 @@ def test_overview_http_endpoint(tmp_path: Path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+
+# --- Simplified intake ---
+
+def test_simplify_intake_skips_when_summary_exists(ready_project: Project) -> None:
+    """If SUMMARY.md already has all Q sections, simplify intake skips."""
+    from rrg_cli.origin import check_intake_needed
+    # Write a SUMMARY.md with Q1, Q2, Q3 sections
+    summary = ready_project.root / "operator" / "origin" / "SUMMARY.md"
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    summary.write_text(
+        "## Q1\n\ntest: t-test\nstatistic: 2.5\nconclusion: ok\n\n"
+        "## Q2\n\ntest: chi-square\nstatistic: 10.3\nconclusion: ok\n\n"
+        "## Q3\n\ntest: regression\nstatistic: 5.1\nconclusion: ok\n"
+    )
+    result = check_intake_needed(ready_project)
+    assert result["needed"] is False
+    assert result["reason"] == "summary already has all question sections"
+
+
+def test_simplify_intake_needed_when_missing_sections(ready_project: Project) -> None:
+    """If SUMMARY.md is missing Q sections, simplify intake says it's needed."""
+    from rrg_cli.origin import check_intake_needed
+    summary = ready_project.root / "operator" / "origin" / "SUMMARY.md"
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    summary.write_text("## Q1\n\nsome content\n")  # Only Q1, missing Q2 and Q3
+    result = check_intake_needed(ready_project)
+    assert result["needed"] is True
+    assert "missing" in result["reason"].lower() or "incomplete" in result["reason"].lower()
+
+
+def test_simplify_intake_needed_when_no_summary(ready_project: Project) -> None:
+    """If SUMMARY.md doesn't exist, simplify intake says it's needed."""
+    from rrg_cli.origin import check_intake_needed
+    result = check_intake_needed(ready_project)
+    assert result["needed"] is True
