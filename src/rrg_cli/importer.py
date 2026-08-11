@@ -9,6 +9,7 @@ folder (zip-slip / path-traversal protection).
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -85,28 +86,69 @@ def lookup_provenance(project: Project, run_id: str) -> dict[str, Any] | None:
     return found
 
 
+def _run_folder_name(
+    stage_id: str, run_label: str, run_id: str | None,
+    executor: str | None = None, model_provenance: str | None = None,
+) -> str:
+    """Build a descriptive run folder name.
+
+    With executor + model_provenance (the modern path):
+        {stage}_{executor}_{model-slug}_{YYYY-MM-DD}__{run_id}
+    Without (backward compat):
+        {stage}_{run_label}__{run_id}
+    """
+    from datetime import date
+    today = date.today().isoformat()
+
+    if executor and model_provenance:
+        # Normalize model provenance to a filesystem-safe slug
+        model_slug = re.sub(r"[^A-Za-z0-9._-]", "-", model_provenance).strip("-.")
+        # Remove provider prefix (e.g. "qwen/qwen3.7-max" → "qwen3.7-max")
+        if "/" in model_slug:
+            model_slug = model_slug.split("/")[-1]
+        return f"{stage_id}_{executor}_{model_slug}_{today}__{run_id or 'norunid'}"
+    else:
+        return f"{stage_id}_{run_label}__{run_id or 'norunid'}"
+
+
 def run_output_folder(
-    project: Project, stage_id: str, run_label: str, run_id: str | None = None
+    project: Project, stage_id: str, run_label: str, run_id: str | None = None,
+    *,
+    executor: str | None = None, model_provenance: str | None = None,
 ) -> Path:
     """Resolve the operator-side run folder for a (stage, model) pair.
 
-    With an explicit ``run_id`` (ADR 0002), the folder is the run_id-suffixed slug the build
-    created. Without one, we resolve the newest run_id-suffixed folder that a build left for
-    this label; if none exists (pre-ADR-0002 layout, or a manual import with no prior build)
-    we fall back to the legacy un-suffixed name.
+    With executor + model_provenance, the folder is descriptively named:
+        {stage}_{executor}_{model}_{date}__{run_id}
+    Without, falls back to the legacy naming: {stage}_{model}__{run_id}
+
+    When no run_id is given, resolves the newest matching folder.
     """
     stage = project.stage(stage_id)
     operator_root = project.path_setting("operator", "operator")
-    template = str(stage.get("output_folder", f"{stage_id}_{{model}}"))
+
     if run_id:
-        slug = f"{run_label}__{run_id}"
-        return operator_root / template.format(model=slug, MODEL=slug)
-    base = template.format(model=run_label, MODEL=run_label)
+        name = _run_folder_name(stage_id, run_label, run_id, executor, model_provenance)
+        return operator_root / name
+    # No run_id — try to find an existing folder
+    if executor and model_provenance:
+        # Search by prefix pattern (date varies)
+        model_slug = re.sub(r"[^A-Za-z0-9._-]", "-", model_provenance).strip("-.")
+        if "/" in model_slug:
+            model_slug = model_slug.split("/")[-1]
+        prefix = f"{stage_id}_{executor}_{model_slug}_"
+    else:
+        prefix = f"{stage_id}_{run_label}"
     if operator_root.is_dir():
-        matches = sorted(operator_root.glob(f"{base}__*"), key=lambda path: path.stat().st_mtime)
+        matches = sorted(operator_root.glob(f"{prefix}*__*"), key=lambda path: path.stat().st_mtime)
         if matches:
             return matches[-1]
-    return operator_root / base
+        # Also try legacy naming
+        legacy = f"{stage_id}_{run_label}"
+        matches = sorted(operator_root.glob(f"{legacy}__*"), key=lambda path: path.stat().st_mtime)
+        if matches:
+            return matches[-1]
+    return operator_root / f"{stage_id}_{run_label}"
 
 
 def _withheld_hashes(project: Project, stage_id: str) -> dict[str, str]:
@@ -182,6 +224,58 @@ def _safe_target(destination: Path, member: str) -> Path:
     return target
 
 
+def _write_run_info(
+    destination: Path,
+    stage: str,
+    model: str | None,
+    run_id: str | None,
+    run_value: str,
+    *,
+    executor: str | None = None,
+    model_provenance: str | None = None,
+    breach: dict[str, Any] | None = None,
+    normalize_result: dict[str, Any] | None = None,
+) -> None:
+    """Write a RUN_INFO.md to the run folder with metadata for human reference."""
+    from datetime import date
+    today = date.today().isoformat()
+    breach = breach or {}
+    norm = normalize_result or {}
+
+    lines = [
+        f"# Run Info — {destination.name}",
+        "",
+        "## Configuration",
+        "",
+        "| Field | Value |",
+        "|-------|-------|",
+        f"| Stage | {stage} |",
+        f"| Executor | {executor or 'manual'} |",
+        f"| Model | {model_provenance or model or 'unknown'} |",
+        f"| Roster model | {model or 'N/A'} |",
+        f"| Run ID | {run_id or 'N/A'} |",
+        f"| Date | {today} |",
+        f"| Run path | {run_value} |",
+        "",
+        "## Pipeline status",
+        "",
+        f"- **Breach check**: {'BREACH DETECTED' if breach.get('copied_secrets') else 'CLEAN'}",
+        f"- **Ran inside project**: {'yes (warning)' if breach.get('ran_inside_project') else 'no'}",
+        f"- **Normalization**: {len(norm.get('files_moved', []))} file(s) renamed, "
+        f"{len(norm.get('summary_json_created', []))} summary.json created"
+        if norm else "- **Normalization**: skipped",
+        f"- **Missing questions**: {norm.get('missing', [])}" if norm and norm.get('missing') else "",
+        "",
+        "## Notes",
+        "",
+        "This file is auto-generated by `rrg import` and provides a human-readable",
+        "summary of the run configuration. Do not edit — it is metadata, not analysis.",
+    ]
+
+    info_path = destination / "RUN_INFO.md"
+    info_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def import_run(
     project: Project,
     stage_id: str | None = None,
@@ -191,6 +285,8 @@ def import_run(
     label: str | None = None,
     run_id: str | None = None,
     normalize: bool = True,
+    executor: str | None = None,
+    model_provenance: str | None = None,
 ) -> dict[str, Any]:
     if source is None:
         raise RRGError("a returned folder or .zip is required")
@@ -218,7 +314,10 @@ def import_run(
     project.stage(stage_id)  # validate stage exists
     roster_entry = project.model(stage_id, model_query)
     run_label = label or safe_label(roster_entry.get("model") if roster_entry else model_query)
-    destination = run_output_folder(project, stage_id, run_label, run_id).resolve()
+    destination = run_output_folder(
+        project, stage_id, run_label, run_id,
+        executor=executor, model_provenance=model_provenance,
+    ).resolve()
 
     destination.mkdir(parents=True, exist_ok=True)
     imported: list[str] = []
@@ -259,6 +358,13 @@ def import_run(
         from .normalize import normalize_run
         normalize_result = normalize_run(project, destination)
 
+    # Auto-write RUN_INFO.md with run metadata
+    _write_run_info(
+        destination, stage_id, model_query, run_id, run_value,
+        executor=executor, model_provenance=model_provenance,
+        breach=breach, normalize_result=normalize_result,
+    )
+
     return {
         "run": run_value,
         "output_folder": str(destination),
@@ -270,4 +376,6 @@ def import_run(
         "count": len(imported),
         "breach": breach,
         "normalize": normalize_result,
+        "executor": executor,
+        "model_provenance": model_provenance,
     }

@@ -240,6 +240,7 @@ def _step_roster(project: Project) -> None:
         table = Table(title=f"Stage: {stage_id}", show_header=True,
                       header_style=f"bold {GOLD}", border_style=DIM, padding=(0, 1))
         table.add_column("Model", style=f"bold {GOLD}")
+        table.add_column("Executor", style=SAGE)
         table.add_column("Vendor", style=LIGHT)
         table.add_column("Type", style=SAGE)
         table.add_column("License", style=DIM)
@@ -247,6 +248,7 @@ def _step_roster(project: Project) -> None:
         for m in models:
             table.add_row(
                 m.get("model", ""),
+                m.get("executor", "—"),
                 m.get("vendor", ""),
                 m.get("type", ""),
                 m.get("license", ""),

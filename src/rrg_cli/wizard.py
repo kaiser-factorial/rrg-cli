@@ -147,6 +147,7 @@ def _check_roster(project: Project) -> dict[str, Any]:
             "models": [
                 {
                     "model": m.get("model", ""),
+                    "executor": m.get("executor", ""),
                     "vendor": m.get("vendor", ""),
                     "type": m.get("type", ""),
                     "license": m.get("license", ""),

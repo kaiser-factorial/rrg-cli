@@ -38,7 +38,13 @@ from .utils import safe_label
 # ---------------------------------------------------------------------------
 
 def _resolve_slug(project: Project, model: str) -> str:
-    """Resolve a model name to its dispatch slug from rrg.yaml > dispatch.model_slugs."""
+    """Resolve a model name to its dispatch slug from rrg.yaml > dispatch.model_slugs.
+
+    Returns empty string for "default" or empty model — the executor will use
+    its own configured default model.
+    """
+    if not model or model.lower() == "default":
+        return ""
     slugs = project.config.get("dispatch", {}).get("model_slugs", {}) or {}
     if model in slugs:
         return str(slugs[model])
@@ -111,6 +117,8 @@ def _call_openrouter(
 ) -> str:
     """Call the OpenRouter chat completions API directly."""
     import httpx
+    if not slug:
+        raise RRGError("openrouter executor requires a model slug; set one in rrg.yaml > dispatch.model_slugs or use a different executor")
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise RRGError("OPENROUTER_API_KEY not set in environment")
@@ -567,7 +575,13 @@ def dispatch(
     4. (Optionally) import results and normalize.
     """
     prefs = load_prefs(project)
-    executor = executor or prefs.get("executor", "manual")
+    # If executor not explicitly passed, check the roster entry for an executor field
+    if not executor:
+        roster_entry = project.model(stage, model)
+        if roster_entry and roster_entry.get("executor"):
+            executor = roster_entry["executor"]
+    if not executor:
+        executor = prefs.get("executor", "manual")
     mode = mode or prefs.get("mode", "discuss")
     if skip_normalize is None:
         skip_normalize = prefs.get("skip_normalize", False)
@@ -645,9 +659,19 @@ def dispatch(
                 if not marker.exists():
                     from .importer import render_run_marker
                     marker.write_text(render_run_marker(run_id))
+            # Extract model provenance — prefer model detected from JSON output, fall back to config
+            detected_model = None
+            if conversation:
+                for entry in conversation:
+                    if entry.get("model"):
+                        detected_model = entry["model"]
+                        break
+            model_name = detected_model or _get_model_provenance(executor, slug if executor in SLUG_EXECUTORS else "")
+
             import_result = import_run(
                 project, stage, model, collected_dir,
                 run_id=run_id, normalize=not skip_normalize,
+                executor=executor, model_provenance=model_name,
             )
         shutil.rmtree(collected_dir, ignore_errors=True)
 
