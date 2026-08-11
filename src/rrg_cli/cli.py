@@ -205,6 +205,17 @@ def build_parser() -> argparse.ArgumentParser:
     eval_cmd.add_argument("--run", required=True, help="run folder path (relative to project root)")
     eval_cmd.add_argument("--json", action="store_true")
 
+    alias_cmd = sub.add_parser("alias", help="manage dispatch executor aliases")
+    _add_project_args(alias_cmd)
+    alias_cmd.add_argument("name", nargs="?", help="alias name (e.g. grok-val)")
+    alias_cmd.add_argument("executor", nargs="?", help="executor to alias (e.g. grok)")
+    alias_cmd.add_argument("--model", default=None, help="model override for the alias")
+    alias_cmd.add_argument("--list", action="store_true", help="list all aliases")
+    alias_cmd.add_argument("--remove", action="store_true", help="remove an alias")
+    alias_cmd.add_argument("--shell", action="store_true", help="print shell function(s) for sourcing")
+    alias_cmd.add_argument("--install", action="store_true", help="write ~/.rrg_aliases.sh and print install instructions")
+    alias_cmd.add_argument("--json", action="store_true")
+
     tui_cmd = sub.add_parser("tui", help="launch the interactive terminal UI")
     _add_project_args(tui_cmd)
     tui_cmd.add_argument("--step", type=int, default=None, help="run up to this step (1-5)")
@@ -467,6 +478,56 @@ def run(args: argparse.Namespace) -> int:
             _emit(result, True)
         else:
             print(result["report"])
+        return 0
+    if args.command == "alias":
+        from .alias import list_aliases, set_alias, remove_alias, generate_shell_file, install_aliases
+        if args.install:
+            result = install_aliases(project)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(result["instructions"])
+                for name in result.get("aliases", []):
+                    print(f"  {name}")
+            return 0
+        if args.shell:
+            print(generate_shell_file(project), end="")
+            return 0
+        if args.remove:
+            if not args.name:
+                raise RRGError("alias name required for --remove")
+            result = remove_alias(project, args.name)
+            _emit(result, True) if args.json else print(f"Removed {args.name}" if result["removed"] else f"Not found: {args.name}")
+            return 0
+        if args.list:
+            aliases = list_aliases(project)
+            if args.json:
+                _emit({"aliases": aliases}, True)
+            elif not aliases:
+                print("No aliases configured.")
+            else:
+                print("Aliases:")
+                for name, entry in sorted(aliases.items()):
+                    model_str = f" [{entry.get('model')}]" if entry.get("model") else ""
+                    print(f"  {name} → {entry['executor']}{model_str}")
+            return 0
+        if args.name and args.executor:
+            result = set_alias(project, args.name, args.executor, args.model)
+            if args.json:
+                _emit(result, True)
+            else:
+                model_str = f" [{result['model']}]" if result.get("model") != "(default)" else ""
+                print(f"Alias: {result['name']} → {result['executor']}{model_str}")
+            return 0
+        # No args — list
+        aliases = list_aliases(project)
+        if not aliases:
+            print("No aliases. Create one: rrg alias grok-val grok")
+        else:
+            print("Aliases:")
+            for name, entry in sorted(aliases.items()):
+                model_str = f" [{entry.get('model')}]" if entry.get("model") else ""
+                print(f"  {name} → {entry['executor']}{model_str}")
         return 0
     if args.command == "tui":
         from .tui import run_tui, run_tui_prefs, run_tui_eval

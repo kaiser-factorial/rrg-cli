@@ -156,9 +156,9 @@ def _exec_codex_turn(
 ) -> tuple[str, str | None]:
     """Send one turn to codex exec. Returns (response, session_id)."""
     if session_id:
-        cmd = ["codex", "exec", "resume", session_id, "--json", prompt]
+        cmd = ["codex", "exec", "resume", session_id, "--json", "--skip-git-repo-check", prompt]
     else:
-        cmd = ["codex", "exec", "--json", prompt]
+        cmd = ["codex", "exec", "--json", "--skip-git-repo-check", prompt]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
         if result.returncode != 0:
@@ -219,7 +219,7 @@ def _exec_pool_turn(
     prompt: str, work_dir: str, session_id: str | None = None,
 ) -> tuple[str, str | None]:
     """Send one turn to pool exec. Returns (response, session_id)."""
-    cmd = ["pool", "exec", "-p", prompt, "--unsafe-auto-allow", "-d", work_dir, "-o", "json"]
+    cmd = ["pool", "exec", "-p", prompt, "--unsafe-auto-allow", "--sandbox", "disabled", "-d", work_dir, "-o", "json"]
     if session_id:
         cmd.extend(["--continue", session_id])
     try:
