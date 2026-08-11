@@ -31,7 +31,8 @@ rrg doctor
 An RRG project contains a `.rrg_root` marker, `rrg.yaml` engine manifest,
 `study.yaml` cartridge, model-facing `shared/`, source `data/`, withheld
 `operator/`, and prompt scaffolds. Replace the starter content and update the two
-YAML files; the CLI itself never needs study-specific edits.
+YAML files; the CLI itself never needs study-specific edits. The starter template
+lives in `src/rrg_cli/templates/project/` — `rrg init` copies it.
 
 ## The CLI
 

@@ -13,3 +13,4 @@ docs/ADVISOR_MEETING.md
 examples/*/operator/_packages/
 examples/*/operator/replication_*
 examples/*/operator/robustness_*
+/workspace/experiments/
