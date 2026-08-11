@@ -27,7 +27,7 @@ DEFAULTS: dict[str, Any] = {
 # Known pref keys (for validation in CLI/TUI)
 PREF_KEYS: tuple[str, ...] = ("executor", "mode", "skip_normalize", "auto_import")
 
-EXECUTOR_OPTIONS: tuple[str, ...] = ("manual", "hermes", "openrouter", "prime-agent")
+EXECUTOR_OPTIONS: tuple[str, ...] = ("manual", "hermes", "claude", "codex", "grok", "openrouter", "prime-agent")
 MODE_OPTIONS: tuple[str, ...] = ("discuss", "nodiscuss", "agent")
 
 

@@ -181,7 +181,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_project_args(dispatch_cmd)
     dispatch_cmd.add_argument("--stage", required=True)
     dispatch_cmd.add_argument("--model", required=True)
-    dispatch_cmd.add_argument("--executor", choices=["manual", "hermes", "openrouter", "prime-agent"],
+    dispatch_cmd.add_argument("--executor", choices=["manual", "hermes", "claude", "codex", "grok", "openrouter", "prime-agent"],
                               default=None, help="executor (default: from prefs or manual)")
     dispatch_cmd.add_argument("--mode", choices=["discuss", "nodiscuss", "agent"],
                               default=None, help="prompt mode (default: from prefs or discuss)")

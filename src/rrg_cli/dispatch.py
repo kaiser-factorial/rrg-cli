@@ -1,19 +1,24 @@
-\
 """Validator dispatch: build → prompt → run executor → collect → import → normalize.
 
-This module orchestrates the full dispatch round-trip. It calls the existing
-``build_package`` and ``render_prompt`` functions, then delegates to an executor
-(manual, hermes, openrouter, or prime-agent) to run the validator model, and
-finally imports the results via ``import_run`` with auto-normalization.
+Executors supported:
+  - manual:    prints instructions for external execution
+  - hermes:    shells out to `hermes -z` (OpenRouter via Hermes agent CLI)
+  - claude:    shells out to `claude -p` (Claude Code CLI)
+  - codex:     shells out to `codex exec` (Codex CLI)
+  - grok:      shells out to `grok -p --single` (Grok CLI)
+  - openrouter: calls the OpenRouter API directly (httpx)
+  - prime-agent: spawns a subagent (requires async IPython context)
 
-Preferences (``.rrg_prefs.yaml``) supply defaults for executor, mode,
-skip_normalize, and auto_import. CLI flags override prefs.
+Multi-turn support: each executor tracks a session ID so turns share conversation
+context. Session IDs are captured from the executor's session management after
+the first turn and passed to --resume/--continue for subsequent turns.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -28,73 +33,178 @@ from .project import Project
 from .prompts import render_prompt
 from .utils import safe_label
 
-# --- Executor helpers ---
+# ---------------------------------------------------------------------------
+# Slug resolution
+# ---------------------------------------------------------------------------
 
 def _resolve_slug(project: Project, model: str) -> str:
     """Resolve a model name to its dispatch slug from rrg.yaml > dispatch.model_slugs."""
     slugs = project.config.get("dispatch", {}).get("model_slugs", {}) or {}
-    # Exact match
     if model in slugs:
         return str(slugs[model])
-    # Fuzzy match (case-insensitive substring)
     for key, slug in slugs.items():
         if model.lower() in key.lower() or key.lower() in model.lower():
             return str(slug)
-    # Fall back to the model name itself
     return safe_label(model)
 
 
-def _run_hermes(prompt: str, slug: str, work_dir: str) -> str:
-    """Shell out to the hermes CLI with the rendered prompt.
+# ---------------------------------------------------------------------------
+# Session ID extraction (per executor)
+# ---------------------------------------------------------------------------
 
-    Hermes runs in *work_dir* (a temp dir outside the project tree) so the
-    validator cannot reach operator secrets.
-    """
-    cmd = ["hermes", "run", "--model", slug]
+def _extract_hermes_session_id(output: str, work_dir: str) -> str | None:
+    """Extract the session ID from `hermes sessions list` after a -z call."""
     try:
         result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            cwd=work_dir,
-            timeout=600,
+            ["hermes", "sessions", "list"],
+            capture_output=True, text=True, timeout=10,
         )
         if result.returncode != 0:
-            return f"[hermes error: exit {result.returncode}]\n{result.stderr}"
-        return result.stdout
+            return None
+        # Parse the table — the first non-header row is the most recent session
+        lines = result.stdout.strip().split("\n")
+        for line in lines:
+            # Skip header and separator lines
+            if line.startswith("Title") or line.startswith("─") or not line.strip():
+                continue
+            # The ID is the last column
+            parts = line.split()
+            if parts:
+                session_id = parts[-1]
+                # Validate it looks like a session ID
+                if re.match(r"\d{8}_\d{6}_[a-f0-9]+", session_id):
+                    return session_id
+        return None
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return None
+
+
+def _extract_codex_session_id(output: str) -> str | None:
+    """Extract session ID from codex exec --json output (JSONL)."""
+    for line in output.strip().split("\n"):
+        try:
+            event = json.loads(line)
+            if "session_id" in event:
+                return event["session_id"]
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return None
+
+
+def _extract_claude_session_id(output: str) -> str | None:
+    """Extract session ID from claude -p --output-format json output."""
+    try:
+        data = json.loads(output)
+        if "session_id" in data:
+            return data["session_id"]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Executor call functions
+# ---------------------------------------------------------------------------
+
+def _exec_hermes_turn(
+    prompt: str, slug: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None]:
+    """Send one turn to hermes -z. Returns (response, session_id)."""
+    cmd = ["hermes", "-z", prompt, "-m", slug, "--provider", "openrouter"]
+    if session_id:
+        cmd.extend(["--resume", session_id])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode != 0:
+            return f"[hermes error: exit {result.returncode}]\n{result.stderr}", session_id
+        # Capture session ID on first turn
+        new_sid = session_id
+        if not session_id:
+            new_sid = _extract_hermes_session_id(result.stdout, work_dir)
+        return result.stdout, new_sid
     except FileNotFoundError:
         raise RRGError("hermes CLI not found; install it or use --executor manual")
     except subprocess.TimeoutExpired:
-        raise RRGError("hermes timed out after 600 seconds")
+        raise RRGError("hermes timed out after 900 seconds")
 
 
-def _call_openrouter(prompt: str, slug: str, messages: list[dict[str, str]] | None = None) -> str:
-    """Call the OpenRouter chat completions API directly.
+def _exec_claude_turn(
+    prompt: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None]:
+    """Send one turn to claude -p. Returns (response, session_id)."""
+    cmd = ["claude", "-p", prompt, "--output-format", "json", "--dangerously-skip-permissions"]
+    if session_id:
+        cmd.extend(["--resume", session_id])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode != 0:
+            return f"[claude error: exit {result.returncode}]\n{result.stderr}", session_id
+        new_sid = session_id
+        if not session_id:
+            new_sid = _extract_claude_session_id(result.stdout)
+        return result.stdout, new_sid
+    except FileNotFoundError:
+        raise RRGError("claude CLI not found; install it or use --executor manual")
+    except subprocess.TimeoutExpired:
+        raise RRGError("claude timed out after 900 seconds")
 
-    Uses ``OPENROUTER_API_KEY`` from the environment.
-    """
+
+def _exec_codex_turn(
+    prompt: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None]:
+    """Send one turn to codex exec. Returns (response, session_id)."""
+    if session_id:
+        cmd = ["codex", "exec", "resume", session_id, "--json", prompt]
+    else:
+        cmd = ["codex", "exec", "--json", prompt]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode != 0:
+            return f"[codex error: exit {result.returncode}]\n{result.stderr}", session_id
+        new_sid = session_id
+        if not session_id:
+            new_sid = _extract_codex_session_id(result.stdout)
+        return result.stdout, new_sid
+    except FileNotFoundError:
+        raise RRGError("codex CLI not found; install it or use --executor manual")
+    except subprocess.TimeoutExpired:
+        raise RRGError("codex timed out after 900 seconds")
+
+
+def _exec_grok_turn(
+    prompt: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None]:
+    """Send one turn to grok -p --single. Returns (response, session_id)."""
+    cmd = ["grok", "-p", prompt, "--single"]
+    if session_id:
+        cmd.extend(["--resume", session_id])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode != 0:
+            return f"[grok error: exit {result.returncode}]\n{result.stderr}", session_id
+        # Grok doesn't easily expose session IDs; use --continue for subsequent turns
+        return result.stdout, session_id  # session_id stays None; rely on -c
+    except FileNotFoundError:
+        raise RRGError("grok CLI not found; install it or use --executor manual")
+    except subprocess.TimeoutExpired:
+        raise RRGError("grok timed out after 900 seconds")
+
+
+def _call_openrouter(
+    prompt: str, slug: str, messages: list[dict[str, str]] | None = None,
+) -> str:
+    """Call the OpenRouter chat completions API directly."""
     import httpx
-
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise RRGError("OPENROUTER_API_KEY not set in environment")
-
     payload_messages = messages or [{"role": "user", "content": prompt}]
-    payload = {
-        "model": slug,
-        "messages": payload_messages,
-        "temperature": 0,
-    }
+    payload = {"model": slug, "messages": payload_messages, "temperature": 0}
     try:
         response = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=300,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload, timeout=300,
         )
         response.raise_for_status()
         data = response.json()
@@ -103,31 +213,174 @@ def _call_openrouter(prompt: str, slug: str, messages: list[dict[str, str]] | No
         raise RRGError(f"OpenRouter API error: {exc}")
 
 
-# --- Agent-mode operator response generator ---
+# ---------------------------------------------------------------------------
+# Agent-mode operator response generator
+# ---------------------------------------------------------------------------
 
 def _generate_operator_response(turn_title: str, validator_response: str, turn_num: int) -> str:
-    """Generate a simple operator response for agent-mode discuss turns.
-
-    This is intentionally conservative — it keeps the multi-turn flow moving
-    without a human. It doesn't try to be a brilliant methodologist.
-    """
+    """Generate a simple operator response for agent-mode discuss turns."""
     title_lower = turn_title.lower()
     if "propose" in title_lower:
-        return (
-            "I've reviewed your proposed methods. They look defensible. "
-            "Please proceed to lock your approach."
-        )
+        return ("I've reviewed your proposed methods. They look defensible. "
+                "Please proceed to lock your approach.")
     if "discuss" in title_lower:
-        return (
-            "Your reasoning is sound. I don't have objections to the methods "
-            "you've proposed. Please finalize your approach."
-        )
+        return ("Your reasoning is sound. I don't have objections to the methods "
+                "you've proposed. Please finalize your approach.")
     if "lock" in title_lower:
         return "Approach confirmed. You may proceed to execution."
     return "Proceed to the next step."
 
 
-# --- Core dispatch ---
+# ---------------------------------------------------------------------------
+# Executor dispatch table
+# ---------------------------------------------------------------------------
+
+EXECUTORS = {
+    "manual": None,
+    "hermes": _exec_hermes_turn,
+    "claude": _exec_claude_turn,
+    "codex": _exec_codex_turn,
+    "grok": _exec_grok_turn,
+}
+
+# Executors that support session-based multi-turn
+MULTI_TURN_EXECUTORS = {"hermes", "claude", "codex", "grok"}
+
+# Executors that need a slug (model identifier)
+SLUG_EXECUTORS = {"hermes", "openrouter"}
+
+
+def _run_executor(
+    executor: str,
+    rendered: Any,
+    slug: str,
+    work_dir: str,
+    mode: str,
+) -> list[dict[str, Any]]:
+    """Run the multi-turn executor loop. Returns conversation history."""
+    conversation: list[dict[str, Any]] = []
+    session_id: str | None = None
+    messages: list[dict[str, str]] = []  # for openrouter conversation accumulation
+
+    for i, turn in enumerate(rendered.turns, 1):
+        if executor == "openrouter":
+            messages.append({"role": "user", "content": turn.text})
+            response = _call_openrouter(turn.text, slug, messages)
+            messages.append({"role": "assistant", "content": response})
+        else:
+            # Look up the executor function by name so mocks can patch it
+            import sys
+            exec_fn = getattr(sys.modules[__name__], f"_exec_{executor}_turn", None)
+            if exec_fn is None:
+                raise RRGError(f"executor not implemented: {executor}")
+
+            if executor in SLUG_EXECUTORS:
+                response, session_id = exec_fn(turn.text, slug, work_dir, session_id)
+            else:
+                response, session_id = exec_fn(turn.text, work_dir, session_id)
+
+        conversation.append({
+            "turn": i,
+            "title": turn.title,
+            "prompt": turn.text,
+            "response": response,
+            "session_id": session_id,
+        })
+
+        # Agent mode: generate operator responses for discuss turns
+        if mode == "agent" and "discuss" in turn.title.lower():
+            op_response = _generate_operator_response(turn.title, response, i)
+            if executor == "openrouter":
+                messages.append({"role": "user", "content": op_response})
+                op_reply = _call_openrouter(op_response, slug, messages)
+                messages.append({"role": "assistant", "content": op_reply})
+            elif executor in SLUG_EXECUTORS:
+                op_reply, session_id = EXECUTORS[executor](op_response, slug, work_dir, session_id)
+            else:
+                op_reply, session_id = EXECUTORS[executor](op_response, work_dir, session_id)
+            conversation.append({
+                "turn": i,
+                "title": "Operator response (agent)",
+                "prompt": op_response,
+                "response": op_reply,
+                "session_id": session_id,
+            })
+
+    # For openrouter, write the final response to the work dir as a file
+    if executor == "openrouter" and conversation:
+        final = conversation[-1]["response"]
+        (Path(work_dir) / "SUMMARY.md").write_text(final, encoding="utf-8")
+
+    return conversation
+
+
+# ---------------------------------------------------------------------------
+# Package reuse
+# ---------------------------------------------------------------------------
+
+def _reuse_package(project: Project, stage: str, model: str, label: str | None) -> dict[str, Any]:
+    """Find the most recent existing package for this stage+model."""
+    from .gui_service import GUIState
+    runs = GUIState(project).runs()
+    for run in runs:
+        if run.get("stage") == stage and model.lower() in str(run.get("model", "")).lower():
+            run_id = run.get("run_id")
+            if run_id:
+                pkg_root = project.path_setting("packages", "operator/_packages")
+                for pkg_dir in sorted(pkg_root.rglob(f"*{run_id}*"), reverse=True):
+                    if pkg_dir.is_dir():
+                        zip_path = Path(str(pkg_dir) + ".zip")
+                        return {
+                            "blocked": False, "published": True, "dry_run": False,
+                            "run_id": run_id,
+                            "package_dir": str(pkg_dir),
+                            "package_zip": str(zip_path) if zip_path.exists() else None,
+                            "output_folder": str(project.path_setting("operator", "operator") / f"{stage}_{safe_label(model)}__{run_id}"),
+                            "report_name": None,
+                            "lint": {"passed": True, "hard_fails": [], "flags": []},
+                            "provenance": {},
+                        }
+    return build_package(project, stage, model, label=label)
+
+
+# ---------------------------------------------------------------------------
+# Manual instructions formatter
+# ---------------------------------------------------------------------------
+
+def _format_manual_instructions(
+    zip_path: str | None, rendered: Any, stage: str, model: str, run_id: str | None,
+) -> str:
+    lines = [
+        f"RRG Dispatch — {stage} / {model}",
+        f"Run ID: {run_id or '(none)'}",
+        "",
+    ]
+    if zip_path and Path(zip_path).exists():
+        lines.append(f"Package zip: {zip_path}")
+        lines.append("")
+        lines.append("Instructions:")
+        lines.append("  1. Copy the zip to a location OUTSIDE this project.")
+        lines.append("  2. Unzip it and run your validator model there.")
+        lines.append("  3. Zip the validator's output folder.")
+        lines.append(f"  4. Run: rrg import <returned.zip> --stage {stage} --model '{model}'")
+    else:
+        lines.append("(package not published — dry run or blocked)")
+    lines.append("")
+    lines.append(f"Prompt: {len(rendered.turns)} turn(s)")
+    for i, turn in enumerate(rendered.turns, 1):
+        lines.append(f"  Turn {i} — {turn.title}")
+        preview = turn.text[:200] + ("..." if len(turn.text) > 200 else "")
+        lines.append(f"    {preview}")
+        lines.append("")
+    if rendered.reminders:
+        lines.append("Operator reminders (never model-facing):")
+        lines.append(f"  {rendered.reminders[:200]}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Core dispatch
+# ---------------------------------------------------------------------------
 
 def dispatch(
     project: Project,
@@ -147,13 +400,9 @@ def dispatch(
 
     1. Build (or reuse) the package.
     2. Render the prompt for the given mode.
-    3. Execute via the chosen executor.
+    3. Execute via the chosen executor (manual/hermes/claude/codex/grok/openrouter/prime-agent).
     4. (Optionally) import results and normalize.
-
-    Returns a dict with: package, prompt, zip_path, executor, mode, conversation,
-    import_result, normalize_result, instructions.
     """
-    # Resolve defaults from prefs
     prefs = load_prefs(project)
     executor = executor or prefs.get("executor", "manual")
     mode = mode or prefs.get("mode", "discuss")
@@ -166,38 +415,24 @@ def dispatch(
     if reuse:
         pkg_result = _reuse_package(project, stage, model, label)
     else:
-        pkg_result = build_package(
-            project, stage, model,
-            label=label, dry_run=dry_run, force=force,
-        )
+        pkg_result = build_package(project, stage, model, label=label, dry_run=dry_run, force=force)
 
     if pkg_result["blocked"]:
         return {
-            "package": pkg_result,
-            "prompt": None,
-            "zip_path": None,
-            "executor": executor,
-            "mode": mode,
-            "conversation": [],
-            "import_result": None,
-            "normalize_result": None,
+            "package": pkg_result, "prompt": None, "zip_path": None,
+            "executor": executor, "mode": mode, "conversation": [],
+            "import_result": None, "normalize_result": None,
             "instructions": "Package blocked by blinding lint. Use --force to override.",
         }
 
     # Step 2: Render the prompt
     rendered = render_prompt(project, stage, model, mode=mode)
     prompt_summary = {
-        "stage": rendered.stage,
-        "model": rendered.model,
-        "output_folder": rendered.output_folder,
-        "report_name": rendered.report_name,
-        "turns": [
-            {"title": t.title, "text": t.text}
-            for t in rendered.turns
-        ],
+        "stage": rendered.stage, "model": rendered.model,
+        "output_folder": rendered.output_folder, "report_name": rendered.report_name,
+        "turns": [{"title": t.title, "text": t.text} for t in rendered.turns],
         "reminders": rendered.reminders,
     }
-
     zip_path = pkg_result.get("package_zip")
     run_id = pkg_result.get("run_id")
 
@@ -207,216 +442,59 @@ def dispatch(
     collected_dir: Path | None = None
 
     if executor == "manual":
-        instructions = _format_manual_instructions(
-            zip_path, rendered, stage, model, run_id,
-        )
-        # In agent mode, generate the conversation plan (for reference)
+        instructions = _format_manual_instructions(zip_path, rendered, stage, model, run_id)
+        # In agent mode, generate the conversation plan for reference
         if mode == "agent":
             for i, turn in enumerate(rendered.turns, 1):
-                conversation.append({
-                    "turn": i,
-                    "title": turn.title,
-                    "prompt": turn.text,
-                    "response": "",
-                })
+                conversation.append({"turn": i, "title": turn.title, "prompt": turn.text, "response": ""})
                 if "discuss" in turn.title.lower():
-                    op_response = _generate_operator_response(turn.title, "", i)
-                    conversation.append({
-                        "turn": i,
-                        "title": "Operator response (agent)",
-                        "prompt": op_response,
-                        "response": "",
-                    })
+                    op = _generate_operator_response(turn.title, "", i)
+                    conversation.append({"turn": i, "title": "Operator response (agent)", "prompt": op, "response": ""})
+    elif executor == "prime-agent":
+        raise RRGError("prime-agent executor requires the async IPython context; "
+                        "use it from a prime-agent session or choose --executor manual/hermes/claude/codex/grok/openrouter")
     else:
-        # For non-manual executors, create a temp work dir OUTSIDE the project
+        # Non-manual executors: create temp work dir, extract zip, run turns
         collected_dir = Path(tempfile.mkdtemp(prefix="rrg_dispatch_"))
         slug = _resolve_slug(project, model)
 
-        if executor == "hermes":
-            conversation = _run_executor_hermes(
-                rendered, slug, str(collected_dir), mode,
-            )
-        elif executor == "openrouter":
-            conversation = _run_executor_openrouter(
-                rendered, slug, str(collected_dir), mode,
-            )
-        elif executor == "prime-agent":
-            raise RRGError(
-                "prime-agent executor requires the async IPython context; "
-                "use it from a prime-agent session or choose --executor manual/hermes/openrouter"
-            )
-        else:
-            raise RRGError(f"unknown executor: {executor}")
+        # Extract the package zip into the work dir so the validator has the files
+        if zip_path and Path(zip_path).exists():
+            import zipfile
+            with zipfile.ZipFile(zip_path) as bundle:
+                bundle.extractall(collected_dir)
+            # Remove the RRG_RUN.txt from the work dir (the validator doesn't need it
+            # and we don't want it to accidentally end up in the output)
+            marker = collected_dir / "RRG_RUN.txt"
+            if marker.exists():
+                marker.unlink()
 
-    # Step 4: Import (if auto_import and we have collected output)
+        conversation = _run_executor(executor, rendered, slug, str(collected_dir), mode)
+
+    # Step 4: Import
     import_result: dict[str, Any] | None = None
     if auto_import and collected_dir is not None:
-        # Ensure there are some files to import
         has_files = any(p.is_file() for p in collected_dir.rglob("*"))
         if has_files:
+            # Restore RRG_RUN.txt marker for auto-resolve
+            if run_id:
+                marker = collected_dir / "RRG_RUN.txt"
+                if not marker.exists():
+                    from .importer import render_run_marker
+                    marker.write_text(render_run_marker(run_id))
             import_result = import_run(
                 project, stage, model, collected_dir,
-                run_id=run_id,
-                normalize=not skip_normalize,
+                run_id=run_id, normalize=not skip_normalize,
             )
-        # Cleanup temp dir
         shutil.rmtree(collected_dir, ignore_errors=True)
-    elif auto_import and executor == "manual":
-        # Manual executor: no auto-import (human runs externally)
-        pass
 
     normalize_result = None
     if import_result and import_result.get("normalize"):
         normalize_result = import_result["normalize"]
 
     return {
-        "package": pkg_result,
-        "prompt": prompt_summary,
-        "zip_path": zip_path,
-        "executor": executor,
-        "mode": mode,
-        "conversation": conversation,
-        "import_result": import_result,
-        "normalize_result": normalize_result,
+        "package": pkg_result, "prompt": prompt_summary, "zip_path": zip_path,
+        "executor": executor, "mode": mode, "conversation": conversation,
+        "import_result": import_result, "normalize_result": normalize_result,
         "instructions": instructions,
     }
-
-
-def _reuse_package(project: Project, stage: str, model: str, label: str | None) -> dict[str, Any]:
-    """Find the most recent existing package for this stage+model and return a summary."""
-    from .gui_service import GUIState
-
-    runs = GUIState(project).runs()
-    for run in runs:
-        if run.get("stage") == stage and model.lower() in str(run.get("model", "")).lower():
-            run_id = run.get("run_id")
-            if run_id:
-                # Find the package dir
-                pkg_root = project.path_setting("packages", "operator/_packages")
-                for pkg_dir in sorted(pkg_root.rglob(f"*{run_id}*"), reverse=True):
-                    if pkg_dir.is_dir():
-                        zip_path = Path(str(pkg_dir) + ".zip")
-                        return {
-                            "blocked": False,
-                            "published": True,
-                            "dry_run": False,
-                            "run_id": run_id,
-                            "package_dir": str(pkg_dir),
-                            "package_zip": str(zip_path) if zip_path.exists() else None,
-                            "output_folder": str(project.path_setting("operator", "operator") / f"{stage}_{safe_label(model)}__{run_id}"),
-                            "report_name": None,
-                            "lint": {"passed": True, "hard_fails": [], "flags": []},
-                            "provenance": {},
-                        }
-    # No existing package found — build a new one
-    return build_package(project, stage, model, label=label)
-
-
-def _format_manual_instructions(
-    zip_path: str | None,
-    rendered: Any,
-    stage: str,
-    model: str,
-    run_id: str | None,
-) -> str:
-    """Format the instructions for manual execution."""
-    lines = [
-        f"RRG Dispatch — {stage} / {model}",
-        f"Run ID: {run_id or '(none)'}",
-        "",
-    ]
-    if zip_path and Path(zip_path).exists():
-        lines.append(f"Package zip: {zip_path}")
-        lines.append("")
-        lines.append("Instructions:")
-        lines.append("  1. Copy the zip to a location OUTSIDE this project.")
-        lines.append("  2. Unzip it and run your validator model there.")
-        lines.append("  3. Zip the validator's output folder.")
-        lines.append(f"  4. Run: rrg import <returned.zip> --stage {stage} --model '{model}'")
-        lines.append("")
-    else:
-        lines.append("(package not published — dry run or blocked)")
-        lines.append("")
-
-    lines.append(f"Prompt: {len(rendered.turns)} turn(s)")
-    for i, turn in enumerate(rendered.turns, 1):
-        lines.append(f"  Turn {i} — {turn.title}")
-        lines.append(f"    {turn.text[:200]}{'...' if len(turn.text) > 200 else ''}")
-        lines.append("")
-
-    if rendered.reminders:
-        lines.append("Operator reminders (never model-facing):")
-        lines.append(f"  {rendered.reminders[:200]}")
-
-    return "\n".join(lines)
-
-
-def _run_executor_hermes(
-    rendered: Any,
-    slug: str,
-    work_dir: str,
-    mode: str,
-) -> list[dict[str, Any]]:
-    """Run the hermes executor turn-by-turn."""
-    conversation: list[dict[str, Any]] = []
-    for i, turn in enumerate(rendered.turns, 1):
-        response = _run_hermes(turn.text, slug, work_dir)
-        conversation.append({
-            "turn": i,
-            "title": turn.title,
-            "prompt": turn.text,
-            "response": response,
-        })
-        # In agent mode, generate operator responses for discuss turns
-        if mode == "agent" and "discuss" in turn.title.lower():
-            op_response = _generate_operator_response(turn.title, response, i)
-            op_reply = _run_hermes(op_response, slug, work_dir)
-            conversation.append({
-                "turn": i,
-                "title": f"Operator response (agent)",
-                "prompt": op_response,
-                "response": op_reply,
-            })
-    return conversation
-
-
-def _run_executor_openrouter(
-    rendered: Any,
-    slug: str,
-    work_dir: str,
-    mode: str,
-) -> list[dict[str, Any]]:
-    """Run the OpenRouter executor turn-by-turn."""
-    conversation: list[dict[str, Any]] = []
-    messages: list[dict[str, str]] = []
-
-    for i, turn in enumerate(rendered.turns, 1):
-        messages.append({"role": "user", "content": turn.text})
-        response = _call_openrouter(turn.text, slug, messages)
-        messages.append({"role": "assistant", "content": response})
-        conversation.append({
-            "turn": i,
-            "title": turn.title,
-            "prompt": turn.text,
-            "response": response,
-        })
-        # In agent mode, generate operator responses for discuss turns
-        if mode == "agent" and "discuss" in turn.title.lower():
-            op_response = _generate_operator_response(turn.title, response, i)
-            messages.append({"role": "user", "content": op_response})
-            op_reply = _call_openrouter(op_response, slug, messages)
-            messages.append({"role": "assistant", "content": op_reply})
-            conversation.append({
-                "turn": i,
-                "title": f"Operator response (agent)",
-                "prompt": op_response,
-                "response": op_reply,
-            })
-
-    # Write any generated content to the work dir
-    # (the validator's final response may contain code/output)
-    if conversation:
-        final = conversation[-1]["response"]
-        (Path(work_dir) / "SUMMARY.md").write_text(final, encoding="utf-8")
-
-    return conversation
