@@ -1,0 +1,595 @@
+Work from the terminal - Poolside
+Documentation Index
+Fetch the complete documentation index at:
+/llms.txt
+Use this file to discover all available pages before exploring further.
+Skip to main content
+Run
+pool
+to open an interactive session. The agent can read your code, run commands, and write files. It asks for approval before taking action unless you switch to the
+Allow all
+approval mode.
+For one-shot tasks and scripts, see
+Automate tasks
+instead.
+This documentation describes Poolside Agent CLI v1.0.15. Check your version with
+pool --version
+. To update, exit any active session and run
+pool update
+from your terminal. See
+Poolside Agent CLI releases on GitHub
+for release history.
+​
+Start a session
+Open a session in your current directory:
+pool
+Open a session in a specific directory:
+pool
+-C
+<
+project-pat
+h
+>
+Run a session in a Git worktree for a branch, creating the worktree and branch if needed:
+pool
+--worktree
+<
+branch-nam
+e
+>
+Use
+--worktree
+without a branch name to let
+pool
+generate a worktree name:
+pool
+--worktree
+When your terminal supports it,
+pool
+notifies the terminal of the worktree directory. New tabs, panes, or splits can open in that directory, so you can run
+git diff
+or other commands while the session continues running. The shell that started
+pool
+remains in its original working directory.
+To add a prefix to generated worktree names, set
+pool.worktree_prefix
+in
+~/.config/poolside/settings.yaml
+.
+Require a configured sandbox for the Poolside agent server:
+pool
+--sandbox
+required
+Use
+--sandbox disabled
+only when you want to run without a configured sandbox.
+Open the session picker to resume a previous session from the current directory:
+pool
+-r
+Open the agent server picker to choose a configured ACP-compatible agent server for the session:
+pool
+-s
+Resume a specific session by ID (a session ID is provided when you exit a session):
+pool
+--resume
+<
+session-i
+d
+>
+By default,
+pool
+uses the credentials saved by
+pool login
+. To authenticate one invocation with an API key, set
+POOLSIDE_API_KEY
+before the command:
+POOLSIDE_API_KEY
+=<
+api-key
+>
+pool
+To override the saved connection for one invocation, set
+POOLSIDE_STANDALONE_BASE_URL
+for an OpenAI-compatible endpoint.
+If an MCP server needs input from environment variables, start
+pool
+with those variables set:
+KEY
+=
+VALUE
+pool
+​
+Write prompts
+Type your prompt in the input area at the bottom and press
+Enter
+to send.
+To find the newline shortcut for your terminal, press
+?
+with an empty input field. Common shortcuts are:
+macOS:
+Shift+Enter
+when your terminal supports key disambiguation, or
+Alt+Enter
+as a fallback. In Apple’s built-in Terminal app, if
+Alt+Enter
+does not insert a new line, go to
+Terminal
+>
+Settings
+>
+Profiles
+> select your profile >
+Keyboard
+, then enable
+Use Option as Meta key
+.
+Linux:
+Shift+Enter
+when your terminal supports key disambiguation, or
+Alt+Enter
+as a fallback.
+Windows:
+Shift+Enter
+when supported by your terminal, or
+Ctrl+Enter
+as a fallback. Use
+Alt+Enter
+when connected over SSH.
+Use the up and down arrow keys to browse prompt history for the current directory.
+Type
+!
+to enter shell mode and run a command directly from the prompt input box.
+You can select text in the conversation output using your terminal’s selection controls. When your terminal supports it, double-click and drag to select whole words.
+​
+Add context
+Type
+@
+in the prompt to mention a file or directory.
+pool
+opens a picker so you can choose what to include.
+When the connected model supports image input, the agent can view PNG, JPEG, GIF, and WebP image files in your project that are 5 MB or smaller.
+To add an image from your clipboard, paste it into the prompt input box with
+Ctrl+V
+.
+​
+Use a skill
+Type
+$
+at the start of the prompt or after a space to open the skill picker. Continue typing to filter the list, then press
+Tab
+or
+Enter
+to insert the selected skill reference into your prompt.
+When you send the prompt, the selected skill applies to that turn. For more information, see
+Skills
+.
+​
+Answer agent questions
+If the agent needs clarification while it is working, it can open a question dialog instead of guessing.
+To trigger this flow, tell the agent to ask when needed, for example
+Ask me a question if anything is ambiguous.
+You can select one of the provided options or choose
+Type your own answer
+to enter a custom response. Press
+Esc
+to decline.
+​
+Notifications
+pool
+can send notifications when a turn ends, when an approval prompt needs your response, or when the agent asks a question. Notifications appear only when the
+pool
+session is not focused.
+When you run
+pool
+in cmux,
+pool
+can also show notifications and status icons.
+​
+Status line
+The status line shows session details such as the current approval mode, agent mode, Git branch, working directory, context usage, and model when that information is available.
+Click the current approval mode, agent mode, or model to open the corresponding selector. Click the current directory to open it in your configured editor.
+Hover over context usage to see cache read and write totals, cache read percentage, and session cost when the connected agent server provides them. The model selector also shows descriptions when the connected agent server provides them.
+When the connected agent server offers thought-level choices, the status line shows the current choice next to the model. Click it, or use
+/thought-level
+or
+/effort
+, to select a reasoning effort level. Available choices depend on the connected agent server and model.
+​
+Approve tool actions
+When the agent wants to run a command or write a file, it asks for approval:
+Allow once
+: Approve only that action
+Always allow: …
+: Save an approval rule for similar actions for the rest of the session
+Accept edits for this session
+: For file write approvals, switch to Accept edits mode for the rest of the session
+Reject
+: Decline and let the agent work around it if possible
+If the agent requests multiple permissions concurrently,
+pool
+queues them and shows one approval prompt at a time.
+To approve all actions automatically, start the session with
+--mode always-allow
+, or switch to the
+Allow all
+approval mode with
+/mode
+.
+For persistent approval rules, path rules, and
+settings.yaml
+locations, see
+Permissions
+.
+​
+Approval modes
+Approval modes control which tool actions require your confirmation. When you use the Poolside agent server, these approval modes are available:
+Approval mode
+ID
+What it does
+Always ask
+default
+Prompts for tool actions that are not already allowed
+Accept edits
+accept-edits
+Auto-approves workspace file reads and writes, then prompts for everything else
+Allow all
+always-allow
+Approves tool actions automatically
+Press
+Shift+Tab
+to cycle through approval modes, or use
+/mode
+to open the approval mode selector.
+When you select an approval mode,
+pool
+asks whether to save it as the default.
+Build and Plan are separate agent modes. Changing the agent mode does not change your approval mode.
+​
+Use plan mode
+Use plan mode when you want to review an implementation approach before the agent changes your code. It is useful for complex refactors, broad changes that span multiple files, or work where early decisions are hard to undo.
+In plan mode, the agent can read and explore your codebase, ask clarifying questions, and write an implementation plan for you to review. Plan mode does not modify source files.
+Starting in v1.0.15, the Poolside agent server uses
+--mode
+for approval modes only. If you run
+pool --mode plan
+,
+pool
+starts with the default approval mode and displays a warning. There is no separate startup flag for Plan mode. Start
+pool
+, then use
+/plan
+or
+/agent-mode plan
+.
+To enter plan mode, type
+/plan
+, type
+/agent-mode plan
+, or click the current agent mode in the status line and select
+Plan
+.
+To leave plan mode, type
+/agent-mode build
+, or click the current agent mode and select
+Build
+. Your approval mode stays unchanged when you switch between Build and Plan.
+When the plan is ready, approve the prompt to switch to build mode, or decline it to keep reviewing or discussing the plan. Declining keeps the agent in plan mode and does not cancel the task.
+pool
+saves each plan as a Markdown file. Outside a sandbox,
+pool
+stores the plan in your local Poolside state directory. In a sandbox, it stores the plan at
+.poolside/plans/
+in your current workspace. The saved path is clickable in the terminal so you can open the plan in your editor.
+​
+Keyboard shortcuts
+CLI shortcuts use the key names shown by your terminal. On macOS, use
+Ctrl
+for CLI shortcuts such as
+Ctrl+M
+,
+Ctrl+C
+, and
+Ctrl+V
+.
+Command
+shortcuts are handled by your terminal application, not by
+pool
+.
+Key
+What it does
+Enter
+Send the prompt
+Shift+Enter
+,
+Alt+Enter
+, or
+Ctrl+Enter
+Insert a new line. The shortcut varies by terminal and platform.
+Up
+/
+Down
+Browse prompt history when the cursor is at the start or end of the prompt
+/
+Show available slash commands
+?
+Show all keyboard shortcuts when the input field is empty
+Shift+Tab
+Cycle through approval modes
+Ctrl+M
+or
+Alt+M
+Open the model selector
+Esc
+Interrupt the agent while it is running
+Esc
+, then
+Esc
+Rewind to the previous turn when idle
+Ctrl+C
+, then
+Ctrl+C
+Exit when idle. The first press clears the input field.
+Ctrl+D
+, then
+Ctrl+D
+Exit when idle with an empty input field
+Ctrl+T
+Toggle tool grouping in the conversation
+Ctrl+G
+Open the current prompt in your configured editor
+Ctrl+V
+Paste clipboard text or attach a clipboard image
+Page Up
+/
+Page Down
+Scroll the conversation
+Press
+?
+with an empty input field to see the shortcut list for your terminal.
+​
+Picker and menu shortcuts
+Where
+Key
+What it does
+Slash command menu
+Up
+/
+Down
+Move through commands
+Slash command menu
+Tab
+Complete the selected command or run a command that opens immediately
+Slash command menu
+Enter
+Complete the selected command, or send the prompt if no command is selected
+Slash command menu
+Esc
+Close the command menu
+File picker
+Up
+/
+Down
+Move through files and directories
+File picker
+Tab
+or
+Enter
+Add the selected file or directory mention
+File picker
+Esc
+Close the file picker
+Skill picker
+Up
+/
+Down
+Move through skills
+Skill picker
+Tab
+or
+Enter
+Add the selected skill reference
+Skill picker
+Esc
+Close the skill picker
+Model, approval mode, agent mode, and thought-level selectors
+Select
+Select an option
+Session picker
+Type text
+Filter sessions
+Session picker
+Up
+/
+Down
+or
+Ctrl+P
+/
+Ctrl+N
+Move through sessions
+Session picker
+Enter
+Resume the selected session
+Session picker
+Tab
+Switch between current-directory sessions and sessions from all directories
+Session picker
+Esc
+Start a new session
+Session picker
+Ctrl+C
+Cancel and exit the picker
+​
+Slash commands
+Type
+/
+to open the command menu, or type a command directly.
+The commands you see can include terminal UI commands and commands from the connected agent server. Non-Poolside ACP servers can expose a different set of server-provided slash commands.
+These commands are built into the
+pool
+interface:
+Command
+What it does
+/model
+Open the model selector for the current session
+/mode [<approval-mode>]
+Open the approval mode selector, or set an approval mode. The Poolside agent server supports
+default
+,
+accept-edits
+, and
+always-allow
+; other ACP servers can provide different values.
+/agent-mode [build|plan]
+Open the agent mode selector, or switch between Build and Plan. Use
+/collaboration-mode
+as an alias. Available only when the connected agent server provides agent modes.
+/thought-level [<level>]
+Open the thought-level selector, or set a thought level. Use
+/effort
+as an alias. Available only when the connected agent server provides thought-level choices.
+/new
+or
+/clear
+Clear conversation history and start a new session. The new session keeps the current model and approval mode. Select the agent mode again if needed.
+/copy
+Copy the last agent response to the clipboard
+/rewind
+Roll back to a previous turn
+/resume
+Open the session picker and switch to a previous session
+/rename
+Rename the current session
+/move
+Move the session to another Git worktree, or create one. If the current worktree has uncommitted changes, choose whether to move those files too.
+/set-option <config-id> <value>
+Set a session configuration option by ID on the connected ACP agent
+/system
+Show the system prompt for the current session when available
+/feedback
+Open a feedback draft and optionally attach logs
+/logs
+Archive debug logs for the current session
+/logout
+Log out through the connected agent server and exit the session. Available only when the server supports logout.
+/quit
+or
+/exit
+Exit the session
+/debug:dump
+Write the raw agent-server message log to a local JSON file
+When you use the Poolside agent server, these additional commands are available:
+Command
+What it does
+/plan
+Switch to plan mode
+/compact [<guidance>]
+Compact conversation context. Add guidance after the command to tell the agent what to preserve, such as
+/compact preserve tool call errors
+.
+/share
+Get a link to the trajectory viewer for the current session
+/mcp
+Show MCP servers, connection status, and tools for the current session
+/sandbox
+Show local sandbox configuration
+/sandbox-apply-to-host
+Review pending sandbox filesystem changes and apply them to the host workspace when available
+/skills
+Refresh and list available skills, including any skill load errors
+/usage
+Show token usage, context window state, and session cost when available
+You can also ask
+pool
+about its own commands, capabilities, and current behavior. The Poolside agent server uses a built-in introspection skill to answer questions about itself.
+​
+Change the agent
+Press
+Ctrl+M
+or
+Alt+M
+, or use
+/model
+to change the agent for the current session or set a new default. The selector includes agent descriptions when the connected agent server provides them. The command is named
+/model
+because
+Agent Client Protocol
+refers to agents, as defined in Poolside, as models.
+After you select a model,
+pool
+asks whether to save it as the default.
+To start a session with a specific model:
+pool
+--model
+poolside/laguna-s-2.1
+​
+Get debug logs
+Use
+/logs
+when you need to collect debug logs for troubleshooting or support.
+/logs
+creates a
+logs.zip
+archive for the current session and prints links to copy the archive, copy the archive path, or open the containing folder. The archive can include session logs, ACP logs, trajectory data, and session metadata. Review the archive before sharing it, because logs and trajectory data can include prompt and response text from the session.
+​
+Rewind a turn
+Press
+Esc
+, then
+Esc
+while idle, or use
+/rewind
+to roll back the last turn. Rewind removes that exchange from the conversation history so the agent does not see it on the next prompt.
+​
+Sessions
+pool
+saves sessions automatically. When you exit,
+pool
+prints the
+--resume
+command for that session so you can continue it later.
+Use
+/resume
+during a session to open the session picker and switch to another saved session. You cannot resume a session while a turn is in progress.
+Use
+/rename
+to rename the current session. The session picker opened by
+pool -r
+or
+pool --resume
+shows renamed sessions from the current directory by default. Press
+Tab
+in the picker to switch between current-directory sessions and sessions from all directories.
+​
+MCP servers
+Use
+/mcp
+to see MCP servers, connection status, and tools for the current session.
+​
+View the trajectory
+When you use the Poolside agent server, use
+/share
+during a session to get a link to the web-based trajectory viewer.
+After a session, browse trajectory files locally:
+pool
+history
+trajectories
+--latest
+​
+Send feedback
+Use
+/feedback
+to open a feedback draft for the current session. You can choose whether to attach logs.
+To attach an earlier session, resume it first with
+pool -r
+, then run
+/feedback
+.
+​
+Related resources
+Automate tasks
+Use other agent servers
+CLI reference
+⌘
+I
+Assistant
+Responses are generated using AI and may contain mistakes.

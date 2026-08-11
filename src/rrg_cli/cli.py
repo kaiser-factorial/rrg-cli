@@ -181,7 +181,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_project_args(dispatch_cmd)
     dispatch_cmd.add_argument("--stage", required=True)
     dispatch_cmd.add_argument("--model", required=True)
-    dispatch_cmd.add_argument("--executor", choices=["manual", "hermes", "claude", "codex", "grok", "openrouter", "prime-agent"],
+    dispatch_cmd.add_argument("--executor", choices=["manual", "hermes", "claude", "codex", "grok", "pool", "openrouter", "prime-agent"],
                               default=None, help="executor (default: from prefs or manual)")
     dispatch_cmd.add_argument("--mode", choices=["discuss", "nodiscuss", "agent"],
                               default=None, help="prompt mode (default: from prefs or discuss)")
@@ -485,7 +485,9 @@ def run(args: argparse.Namespace) -> int:
 
 def _print_dispatch_result(result):
     pkg = result["package"]
-    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['executor']} executor")
+    model_prov = result.get("model_provenance", "")
+    model_str = f" [{model_prov}]" if model_prov else ""
+    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['executor']} executor{model_str}")
     if pkg.get("blocked"):
         print("  \u2717 Package blocked by blinding lint")
         return

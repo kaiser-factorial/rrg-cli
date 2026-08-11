@@ -110,7 +110,9 @@ def _exec_hermes_turn(
     prompt: str, slug: str, work_dir: str, session_id: str | None = None,
 ) -> tuple[str, str | None]:
     """Send one turn to hermes -z. Returns (response, session_id)."""
-    cmd = ["hermes", "-z", prompt, "-m", slug, "--provider", "openrouter"]
+    cmd = ["hermes", "-z", prompt]
+    if slug:
+        cmd.extend(["-m", slug, "--provider", "openrouter"])
     if session_id:
         cmd.extend(["--resume", session_id])
     try:
@@ -213,6 +215,99 @@ def _call_openrouter(
         raise RRGError(f"OpenRouter API error: {exc}")
 
 
+def _exec_pool_turn(
+    prompt: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None]:
+    """Send one turn to pool exec. Returns (response, session_id)."""
+    cmd = ["pool", "exec", "-p", prompt, "--unsafe-auto-allow", "-d", work_dir, "-o", "json"]
+    if session_id:
+        cmd.extend(["--continue", session_id])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode not in (0, 4):
+            return f"[pool error: exit {result.returncode}]\n{result.stderr}", session_id
+        # Parse NLJSON for session/run ID
+        new_sid = session_id
+        for line in result.stdout.strip().split("\n"):
+            try:
+                event = json.loads(line)
+                if "run_id" in event:
+                    new_sid = event["run_id"]
+                    break
+                if "session_id" in event:
+                    new_sid = event["session_id"]
+                    break
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return result.stdout, new_sid
+    except FileNotFoundError:
+        raise RRGError("pool CLI not found; install it or use --executor manual")
+    except subprocess.TimeoutExpired:
+        raise RRGError("pool timed out after 900 seconds")
+
+
+# ---------------------------------------------------------------------------
+# Model provenance extraction
+# ---------------------------------------------------------------------------
+
+def _get_model_provenance(executor: str, slug: str) -> str:
+    """Best-effort extraction of the model name used by an executor.
+
+    For executors that don't take a model flag (hermes without -m, codex, grok),
+    this reads the agent's config to find the default model for provenance.
+    """
+    if executor == "hermes" and slug:
+        return slug  # explicit model was passed
+    if executor == "openrouter" and slug:
+        return slug  # slug is the OpenRouter model
+
+    # Read config files for default models
+    import os
+    home = os.path.expanduser("~")
+
+    if executor == "hermes":
+        try:
+            result = subprocess.run(
+                ["hermes", "status"], capture_output=True, text=True, timeout=10,
+            )
+            for line in result.stdout.split("\n"):
+                if "Model:" in line:
+                    return line.split("Model:")[1].strip()
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+        return "hermes-default"
+
+    if executor == "codex":
+        config_path = os.path.join(home, ".codex", "config.toml")
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                for line in f:
+                    if line.strip().startswith("model"):
+                        return line.split("=")[1].strip().strip("\"")
+        return "codex-default"
+
+    if executor == "grok":
+        cache_path = os.path.join(home, ".grok", "models_cache.json")
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path) as f:
+                    data = json.load(f)
+                models = data.get("models", {})
+                if models:
+                    return next(iter(models.keys()))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return "grok-default"
+
+    if executor == "claude":
+        return "claude-default"  # Claude doesn't expose config easily
+
+    if executor == "pool":
+        return "poolside-default"
+
+    return f"{executor}-default"
+
+
 # ---------------------------------------------------------------------------
 # Agent-mode operator response generator
 # ---------------------------------------------------------------------------
@@ -241,13 +336,19 @@ EXECUTORS = {
     "claude": _exec_claude_turn,
     "codex": _exec_codex_turn,
     "grok": _exec_grok_turn,
+    "pool": _exec_pool_turn,
 }
 
 # Executors that support session-based multi-turn
-MULTI_TURN_EXECUTORS = {"hermes", "claude", "codex", "grok"}
+MULTI_TURN_EXECUTORS = {"hermes", "claude", "codex", "grok", "pool"}
 
-# Executors that need a slug (model identifier)
+# Executors that need a slug (model identifier) from rrg.yaml
 SLUG_EXECUTORS = {"hermes", "openrouter"}
+
+# Executors where the model flag is optional (use agent's default)
+OPTIONAL_MODEL_EXECUTORS = {"hermes", "codex", "grok", "claude", "pool"}
+
+
 
 
 def _run_executor(
@@ -456,7 +557,7 @@ def dispatch(
     else:
         # Non-manual executors: create temp work dir, extract zip, run turns
         collected_dir = Path(tempfile.mkdtemp(prefix="rrg_dispatch_"))
-        slug = _resolve_slug(project, model)
+        slug = _resolve_slug(project, model) if executor in SLUG_EXECUTORS else ""
 
         # Extract the package zip into the work dir so the validator has the files
         if zip_path and Path(zip_path).exists():
@@ -492,9 +593,13 @@ def dispatch(
     if import_result and import_result.get("normalize"):
         normalize_result = import_result["normalize"]
 
+    # Extract model provenance
+    model_name = _get_model_provenance(executor, slug if executor in SLUG_EXECUTORS else "")
+
     return {
         "package": pkg_result, "prompt": prompt_summary, "zip_path": zip_path,
         "executor": executor, "mode": mode, "conversation": conversation,
         "import_result": import_result, "normalize_result": normalize_result,
         "instructions": instructions,
+        "model_provenance": model_name,
     }

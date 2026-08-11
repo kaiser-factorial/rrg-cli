@@ -184,3 +184,26 @@ def test_dispatch_flags_override_prefs(ready_project: Project) -> None:
     result = dispatch(ready_project, "replication", "ReplicationModel",
                       executor="manual", mode="discuss")
     assert result["mode"] == "discuss"  # flag wins
+
+
+
+# --- Pool executor (mocked) ---
+
+def test_dispatch_pool_shells_out(ready_project: Project) -> None:
+    with patch("rrg_cli.dispatch._exec_pool_turn") as mock_pool:
+        mock_pool.return_value = ("Analysis complete.", "run_123")
+        result = dispatch(ready_project, "replication", "ReplicationModel",
+                          executor="pool", mode="nodiscuss",
+                          auto_import=False)
+        assert result["executor"] == "pool"
+        assert len(result["conversation"]) > 0
+        assert mock_pool.call_count > 0
+
+
+# --- Model provenance ---
+
+def test_model_provenance_extracted(ready_project: Project) -> None:
+    result = dispatch(ready_project, "replication", "ReplicationModel",
+                      executor="manual", mode="discuss")
+    assert "model_provenance" in result
+    assert result["model_provenance"] is not None
