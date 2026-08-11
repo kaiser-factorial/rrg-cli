@@ -108,7 +108,7 @@ def test_generate_operator_response_simple():
 
 def test_dispatch_hermes_shells_out(ready_project: Project, tmp_path: Path) -> None:
     with patch("rrg_cli.dispatch._exec_hermes_turn") as mock_hermes:
-        mock_hermes.return_value = ("I will analyze the data.\n\n```python\nprint('hello')\n```", "session123")
+        mock_hermes.return_value = ("I will analyze the data.\n\n```python\nprint('hello')\n```", "session123", "qwen/qwen3.7-max")
         result = dispatch(ready_project, "replication", "ReplicationModel",
                           executor="hermes", mode="nodiscuss",
                           auto_import=False)
@@ -134,11 +134,11 @@ def test_dispatch_openrouter_api_call(ready_project: Project) -> None:
 
 def test_dispatch_auto_import(ready_project: Project, tmp_path: Path) -> None:
     with patch("rrg_cli.dispatch._exec_hermes_turn") as mock_hermes:
-        mock_hermes.return_value = ("Done.", "session123")
+        mock_hermes.return_value = ("Done.", "session123", "qwen/qwen3.7-max")
         # Make the executor produce some output files
         def side_effect(prompt, slug, work_dir, session_id=None):
             (Path(work_dir) / "SUMMARY.md").write_text("## Q1\nok")
-            return ("Done.", "session123")
+            return ("Done.", "session123", "qwen/qwen3.7-max")
         mock_hermes.side_effect = side_effect
         result = dispatch(ready_project, "replication", "ReplicationModel",
                           executor="hermes", mode="nodiscuss",
@@ -149,7 +149,7 @@ def test_dispatch_auto_import(ready_project: Project, tmp_path: Path) -> None:
 
 def test_dispatch_no_auto_import(ready_project: Project) -> None:
     with patch("rrg_cli.dispatch._exec_hermes_turn") as mock_hermes:
-        mock_hermes.return_value = ("Done.", "session123")
+        mock_hermes.return_value = ("Done.", "session123", "qwen/qwen3.7-max")
         result = dispatch(ready_project, "replication", "ReplicationModel",
                           executor="hermes", mode="nodiscuss",
                           auto_import=False)
@@ -160,7 +160,7 @@ def test_dispatch_skip_normalize(ready_project: Project) -> None:
     with patch("rrg_cli.dispatch._exec_hermes_turn") as mock_hermes:
         def side_effect(prompt, slug, work_dir, session_id=None):
             (Path(work_dir) / "SUMMARY.md").write_text("## Q1\nok")
-            return ("Done.", "session123")
+            return ("Done.", "session123", "qwen/qwen3.7-max")
         mock_hermes.side_effect = side_effect
         result = dispatch(ready_project, "replication", "ReplicationModel",
                           executor="hermes", mode="nodiscuss",
@@ -191,7 +191,7 @@ def test_dispatch_flags_override_prefs(ready_project: Project) -> None:
 
 def test_dispatch_pool_shells_out(ready_project: Project) -> None:
     with patch("rrg_cli.dispatch._exec_pool_turn") as mock_pool:
-        mock_pool.return_value = ("Analysis complete.", "run_123")
+        mock_pool.return_value = ("Analysis complete.", "run_123", "poolside-default")
         result = dispatch(ready_project, "replication", "ReplicationModel",
                           executor="pool", mode="nodiscuss",
                           auto_import=False)

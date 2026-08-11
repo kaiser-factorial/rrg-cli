@@ -106,92 +106,6 @@ def _extract_claude_session_id(output: str) -> str | None:
 # Executor call functions
 # ---------------------------------------------------------------------------
 
-def _exec_hermes_turn(
-    prompt: str, slug: str, work_dir: str, session_id: str | None = None,
-) -> tuple[str, str | None]:
-    """Send one turn to hermes -z. Returns (response, session_id)."""
-    cmd = ["hermes", "-z", prompt]
-    if slug:
-        cmd.extend(["-m", slug, "--provider", "openrouter"])
-    if session_id:
-        cmd.extend(["--resume", session_id])
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
-        if result.returncode != 0:
-            return f"[hermes error: exit {result.returncode}]\n{result.stderr}", session_id
-        # Capture session ID on first turn
-        new_sid = session_id
-        if not session_id:
-            new_sid = _extract_hermes_session_id(result.stdout, work_dir)
-        return result.stdout, new_sid
-    except FileNotFoundError:
-        raise RRGError("hermes CLI not found; install it or use --executor manual")
-    except subprocess.TimeoutExpired:
-        raise RRGError("hermes timed out after 900 seconds")
-
-
-def _exec_claude_turn(
-    prompt: str, work_dir: str, session_id: str | None = None,
-) -> tuple[str, str | None]:
-    """Send one turn to claude -p. Returns (response, session_id)."""
-    cmd = ["claude", "-p", prompt, "--output-format", "json", "--dangerously-skip-permissions"]
-    if session_id:
-        cmd.extend(["--resume", session_id])
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
-        if result.returncode != 0:
-            return f"[claude error: exit {result.returncode}]\n{result.stderr}", session_id
-        new_sid = session_id
-        if not session_id:
-            new_sid = _extract_claude_session_id(result.stdout)
-        return result.stdout, new_sid
-    except FileNotFoundError:
-        raise RRGError("claude CLI not found; install it or use --executor manual")
-    except subprocess.TimeoutExpired:
-        raise RRGError("claude timed out after 900 seconds")
-
-
-def _exec_codex_turn(
-    prompt: str, work_dir: str, session_id: str | None = None,
-) -> tuple[str, str | None]:
-    """Send one turn to codex exec. Returns (response, session_id)."""
-    if session_id:
-        cmd = ["codex", "exec", "resume", session_id, "--json", "--skip-git-repo-check", prompt]
-    else:
-        cmd = ["codex", "exec", "--json", "--skip-git-repo-check", prompt]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
-        if result.returncode != 0:
-            return f"[codex error: exit {result.returncode}]\n{result.stderr}", session_id
-        new_sid = session_id
-        if not session_id:
-            new_sid = _extract_codex_session_id(result.stdout)
-        return result.stdout, new_sid
-    except FileNotFoundError:
-        raise RRGError("codex CLI not found; install it or use --executor manual")
-    except subprocess.TimeoutExpired:
-        raise RRGError("codex timed out after 900 seconds")
-
-
-def _exec_grok_turn(
-    prompt: str, work_dir: str, session_id: str | None = None,
-) -> tuple[str, str | None]:
-    """Send one turn to grok -p --single. Returns (response, session_id)."""
-    cmd = ["grok", "-p", prompt, "--single"]
-    if session_id:
-        cmd.extend(["--resume", session_id])
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
-        if result.returncode != 0:
-            return f"[grok error: exit {result.returncode}]\n{result.stderr}", session_id
-        # Grok doesn't easily expose session IDs; use --continue for subsequent turns
-        return result.stdout, session_id  # session_id stays None; rely on -c
-    except FileNotFoundError:
-        raise RRGError("grok CLI not found; install it or use --executor manual")
-    except subprocess.TimeoutExpired:
-        raise RRGError("grok timed out after 900 seconds")
-
-
 def _call_openrouter(
     prompt: str, slug: str, messages: list[dict[str, str]] | None = None,
 ) -> str:
@@ -215,98 +129,176 @@ def _call_openrouter(
         raise RRGError(f"OpenRouter API error: {exc}")
 
 
+def _exec_hermes_turn(
+    prompt: str, slug: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None, str | None]:
+    """Send one turn to hermes -z. Returns (response, session_id, model)."""
+    cmd = ["hermes", "-z", prompt]
+    if slug:
+        cmd.extend(["-m", slug, "--provider", "openrouter"])
+    if session_id:
+        cmd.extend(["--resume", session_id])
+    # Use --usage-file to capture session_id + model
+    usage_file = os.path.join(work_dir, ".rrg_hermes_usage.json")
+    cmd.extend(["--usage-file", usage_file])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode != 0:
+            return f"[hermes error: exit {result.returncode}]\n{result.stderr}", session_id, None
+        # Parse usage file for session_id and model
+        new_sid = session_id
+        model = None
+        try:
+            usage = json.loads(Path(usage_file).read_text())
+            new_sid = usage.get("session_id", session_id)
+            model = usage.get("model")
+        except (json.JSONDecodeError, OSError):
+            pass
+        return result.stdout, new_sid, model
+    except FileNotFoundError:
+        raise RRGError("hermes CLI not found; install it or use --executor manual")
+    except subprocess.TimeoutExpired:
+        raise RRGError("hermes timed out after 900 seconds")
+
+
+def _exec_claude_turn(
+    prompt: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None, str | None]:
+    """Send one turn to claude -p. Returns (response, session_id, model)."""
+    cmd = ["claude", "-p", prompt, "--output-format", "json", "--dangerously-skip-permissions"]
+    if session_id:
+        cmd.extend(["--resume", session_id])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode != 0:
+            return f"[claude error: exit {result.returncode}]\n{result.stderr}", session_id, None
+        # Parse JSON output for session_id and model
+        new_sid = session_id
+        model = None
+        try:
+            data = json.loads(result.stdout)
+            new_sid = data.get("session_id", session_id)
+            model_usage = data.get("modelUsage", {})
+            if model_usage:
+                model = next(iter(model_usage.keys()))
+            # Extract the result text
+            text = data.get("result", result.stdout)
+            return text, new_sid, model
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return result.stdout, new_sid, model
+    except FileNotFoundError:
+        raise RRGError("claude CLI not found; install it or use --executor manual")
+    except subprocess.TimeoutExpired:
+        raise RRGError("claude timed out after 900 seconds")
+
+
+def _exec_codex_turn(
+    prompt: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None, str | None]:
+    """Send one turn to codex exec. Returns (response, session_id, model)."""
+    if session_id:
+        cmd = ["codex", "exec", "resume", session_id, "--json", "--skip-git-repo-check", prompt]
+    else:
+        cmd = ["codex", "exec", "--json", "--skip-git-repo-check", prompt]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode != 0:
+            return f"[codex error: exit {result.returncode}]\n{result.stderr}", session_id, None
+        # Parse JSONL for session_id and model
+        new_sid = session_id
+        model = None
+        text_parts = []
+        for line in result.stdout.strip().split("\n"):
+            try:
+                event = json.loads(line)
+                if "session_id" in event and not new_sid:
+                    new_sid = event["session_id"]
+                if "model" in event and not model:
+                    model = event["model"]
+                if "text" in event:
+                    text_parts.append(event["text"])
+                elif "content" in event:
+                    text_parts.append(str(event["content"]))
+            except (json.JSONDecodeError, TypeError):
+                text_parts.append(line)
+        text = "\n".join(text_parts) if text_parts else result.stdout
+        return text, new_sid, model
+    except FileNotFoundError:
+        raise RRGError("codex CLI not found; install it or use --executor manual")
+    except subprocess.TimeoutExpired:
+        raise RRGError("codex timed out after 900 seconds")
+
+
+def _exec_grok_turn(
+    prompt: str, work_dir: str, session_id: str | None = None,
+) -> tuple[str, str | None, str | None]:
+    """Send one turn to grok --single. Returns (response, session_id, model)."""
+    cmd = ["grok", "--single", prompt, "--output-format", "json",
+           "--no-auto-update", "--always-approve"]
+    if session_id:
+        cmd.extend(["--resume", session_id])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        if result.returncode != 0:
+            return f"[grok error: exit {result.returncode}]\n{result.stderr}", session_id, None
+        # Parse JSON output for session_id and model
+        new_sid = session_id
+        model = None
+        try:
+            data = json.loads(result.stdout)
+            new_sid = data.get("sessionId", session_id)
+            model_usage = data.get("modelUsage", {})
+            if model_usage:
+                model = next(iter(model_usage.keys()))
+            text = data.get("text", result.stdout)
+            return text, new_sid, model
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return result.stdout, new_sid, model
+    except FileNotFoundError:
+        raise RRGError("grok CLI not found; install it or use --executor manual")
+    except subprocess.TimeoutExpired:
+        raise RRGError("grok timed out after 900 seconds")
+
+
 def _exec_pool_turn(
     prompt: str, work_dir: str, session_id: str | None = None,
-) -> tuple[str, str | None]:
-    """Send one turn to pool exec. Returns (response, session_id)."""
-    cmd = ["pool", "exec", "-p", prompt, "--unsafe-auto-allow", "--sandbox", "disabled", "-d", work_dir, "-o", "json"]
+) -> tuple[str, str | None, str | None]:
+    """Send one turn to pool exec. Returns (response, session_id, model)."""
+    cmd = ["pool", "exec", "-p", prompt, "--unsafe-auto-allow",
+           "--sandbox", "disabled", "-d", work_dir, "-o", "json"]
     if session_id:
         cmd.extend(["--continue", session_id])
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
         if result.returncode not in (0, 4):
-            return f"[pool error: exit {result.returncode}]\n{result.stderr}", session_id
-        # Parse NLJSON for session/run ID
+            return f"[pool error: exit {result.returncode}]\n{result.stderr}", session_id, None
+        # Parse NLJSON for session/run ID and model
         new_sid = session_id
+        model = None
+        text_parts = []
         for line in result.stdout.strip().split("\n"):
             try:
                 event = json.loads(line)
-                if "run_id" in event:
+                if "run_id" in event and not new_sid:
                     new_sid = event["run_id"]
-                    break
-                if "session_id" in event:
+                if "session_id" in event and not new_sid:
                     new_sid = event["session_id"]
-                    break
+                if "model" in event and not model:
+                    model = event["model"]
+                if "text" in event:
+                    text_parts.append(event["text"])
+                elif "content" in event:
+                    text_parts.append(str(event["content"]))
             except (json.JSONDecodeError, TypeError):
-                continue
-        return result.stdout, new_sid
+                text_parts.append(line)
+        text = "\n".join(text_parts) if text_parts else result.stdout
+        return text, new_sid, model
     except FileNotFoundError:
         raise RRGError("pool CLI not found; install it or use --executor manual")
     except subprocess.TimeoutExpired:
         raise RRGError("pool timed out after 900 seconds")
-
-
-# ---------------------------------------------------------------------------
-# Model provenance extraction
-# ---------------------------------------------------------------------------
-
-def _get_model_provenance(executor: str, slug: str) -> str:
-    """Best-effort extraction of the model name used by an executor.
-
-    For executors that don't take a model flag (hermes without -m, codex, grok),
-    this reads the agent's config to find the default model for provenance.
-    """
-    if executor == "hermes" and slug:
-        return slug  # explicit model was passed
-    if executor == "openrouter" and slug:
-        return slug  # slug is the OpenRouter model
-
-    # Read config files for default models
-    import os
-    home = os.path.expanduser("~")
-
-    if executor == "hermes":
-        try:
-            result = subprocess.run(
-                ["hermes", "status"], capture_output=True, text=True, timeout=10,
-            )
-            for line in result.stdout.split("\n"):
-                if "Model:" in line:
-                    return line.split("Model:")[1].strip()
-        except (subprocess.SubprocessError, FileNotFoundError):
-            pass
-        return "hermes-default"
-
-    if executor == "codex":
-        config_path = os.path.join(home, ".codex", "config.toml")
-        if os.path.exists(config_path):
-            with open(config_path) as f:
-                for line in f:
-                    if line.strip().startswith("model"):
-                        return line.split("=")[1].strip().strip("\"")
-        return "codex-default"
-
-    if executor == "grok":
-        cache_path = os.path.join(home, ".grok", "models_cache.json")
-        if os.path.exists(cache_path):
-            try:
-                with open(cache_path) as f:
-                    data = json.load(f)
-                models = data.get("models", {})
-                if models:
-                    return next(iter(models.keys()))
-            except (json.JSONDecodeError, OSError):
-                pass
-        return "grok-default"
-
-    if executor == "claude":
-        return "claude-default"  # Claude doesn't expose config easily
-
-    if executor == "pool":
-        return "poolside-default"
-
-    return f"{executor}-default"
-
 
 # ---------------------------------------------------------------------------
 # Agent-mode operator response generator
@@ -363,11 +355,13 @@ def _run_executor(
     session_id: str | None = None
     messages: list[dict[str, str]] = []  # for openrouter conversation accumulation
 
+    detected_model: str | None = None
     for i, turn in enumerate(rendered.turns, 1):
         if executor == "openrouter":
             messages.append({"role": "user", "content": turn.text})
             response = _call_openrouter(turn.text, slug, messages)
             messages.append({"role": "assistant", "content": response})
+            detected_model = slug
         else:
             # Look up the executor function by name so mocks can patch it
             import sys
@@ -376,9 +370,11 @@ def _run_executor(
                 raise RRGError(f"executor not implemented: {executor}")
 
             if executor in SLUG_EXECUTORS:
-                response, session_id = exec_fn(turn.text, slug, work_dir, session_id)
+                response, session_id, model = exec_fn(turn.text, slug, work_dir, session_id)
             else:
-                response, session_id = exec_fn(turn.text, work_dir, session_id)
+                response, session_id, model = exec_fn(turn.text, work_dir, session_id)
+            if model and not detected_model:
+                detected_model = model
 
         conversation.append({
             "turn": i,
@@ -386,6 +382,7 @@ def _run_executor(
             "prompt": turn.text,
             "response": response,
             "session_id": session_id,
+            "model": model if executor != "openrouter" else slug,
         })
 
         # Agent mode: generate operator responses for discuss turns
@@ -395,16 +392,20 @@ def _run_executor(
                 messages.append({"role": "user", "content": op_response})
                 op_reply = _call_openrouter(op_response, slug, messages)
                 messages.append({"role": "assistant", "content": op_reply})
-            elif executor in SLUG_EXECUTORS:
-                op_reply, session_id = EXECUTORS[executor](op_response, slug, work_dir, session_id)
             else:
-                op_reply, session_id = EXECUTORS[executor](op_response, work_dir, session_id)
+                import sys as _sys
+                _exec_fn = getattr(_sys.modules[__name__], f"_exec_{executor}_turn", None)
+                if executor in SLUG_EXECUTORS:
+                    op_reply, session_id, _ = _exec_fn(op_response, slug, work_dir, session_id)
+                else:
+                    op_reply, session_id, _ = _exec_fn(op_response, work_dir, session_id)
             conversation.append({
                 "turn": i,
                 "title": "Operator response (agent)",
                 "prompt": op_response,
                 "response": op_reply,
                 "session_id": session_id,
+                "model": detected_model,
             })
 
     # For openrouter, write the final response to the work dir as a file
@@ -413,6 +414,67 @@ def _run_executor(
         (Path(work_dir) / "SUMMARY.md").write_text(final, encoding="utf-8")
 
     return conversation
+
+
+# ---------------------------------------------------------------------------
+# Model provenance extraction (fallback when JSON output doesn't include model)
+# ---------------------------------------------------------------------------
+
+def _get_model_provenance(executor: str, slug: str) -> str:
+    """Best-effort extraction of the model name used by an executor.
+
+    For executors that don't take a model flag or whose JSON output didn't
+    include the model, this reads the agent's config to find the default model.
+    """
+    if executor == "hermes" and slug:
+        return slug
+    if executor == "openrouter" and slug:
+        return slug
+
+    import os
+    home = os.path.expanduser("~")
+
+    if executor == "hermes":
+        try:
+            result = subprocess.run(
+                ["hermes", "status"], capture_output=True, text=True, timeout=10,
+            )
+            for line in result.stdout.split("\n"):
+                if "Model:" in line:
+                    return line.split("Model:")[1].strip()
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+        return "hermes-default"
+
+    if executor == "codex":
+        config_path = os.path.join(home, ".codex", "config.toml")
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                for line in f:
+                    if line.strip().startswith("model"):
+                        return line.split("=")[1].strip().strip("\"")
+        return "codex-default"
+
+    if executor == "grok":
+        cache_path = os.path.join(home, ".grok", "models_cache.json")
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path) as f:
+                    data = json.load(f)
+                models = data.get("models", {})
+                if models:
+                    return next(iter(models.keys()))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return "grok-default"
+
+    if executor == "claude":
+        return "claude-default"
+
+    if executor == "pool":
+        return "poolside-default"
+
+    return f"{executor}-default"
 
 
 # ---------------------------------------------------------------------------
@@ -593,8 +655,14 @@ def dispatch(
     if import_result and import_result.get("normalize"):
         normalize_result = import_result["normalize"]
 
-    # Extract model provenance
-    model_name = _get_model_provenance(executor, slug if executor in SLUG_EXECUTORS else "")
+    # Extract model provenance — prefer model detected from JSON output, fall back to config
+    detected_model = None
+    if conversation:
+        for entry in conversation:
+            if entry.get("model"):
+                detected_model = entry["model"]
+                break
+    model_name = detected_model or _get_model_provenance(executor, slug if executor in SLUG_EXECUTORS else "")
 
     return {
         "package": pkg_result, "prompt": prompt_summary, "zip_path": zip_path,
