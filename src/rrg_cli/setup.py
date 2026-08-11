@@ -214,7 +214,7 @@ def render_question_extraction_prompt(project: Project) -> dict[str, Any]:
     }
 
 
-def apply_questions(project: Project, text: str) -> dict[str, Any]:
+def apply_questions(project: Project, text: str, select: str | None = None) -> dict[str, Any]:
     """Apply extracted questions to shared/QUESTIONS.md.
 
     Parses the numbered list, writes QUESTIONS.md, and generates questions_map.yaml.
@@ -255,6 +255,24 @@ def apply_questions(project: Project, text: str) -> dict[str, Any]:
     if not questions:
         raise RRGError("no questions found in the extraction text (expected a numbered list)")
 
+    # Filter to selected questions if --select was passed
+    if select:
+        selected_nums = set()
+        for part in select.split(","):
+            part = part.strip()
+            if part:
+                try:
+                    selected_nums.add(int(part))
+                except ValueError:
+                    raise RRGError(f"invalid question number in --select: {part}")
+        questions = [q for q in questions if q["new"] in selected_nums]
+        if not questions:
+            raise RRGError(f"no questions matched --select '{select}' (available: {','.join(str(q['new']) for q in questions)})")
+
+    # Renumber sequentially after selection
+    for new_num, q in enumerate(questions, 1):
+        q["new"] = new_num
+
     # Write QUESTIONS.md
     questions_path = project.path("shared/QUESTIONS.md")
     questions_path.parent.mkdir(parents=True, exist_ok=True)
@@ -289,6 +307,7 @@ def apply_questions(project: Project, text: str) -> dict[str, Any]:
         "questions_written": str(questions_path.relative_to(project.root)),
         "map_written": str(map_path.relative_to(project.root)),
         "count": len(questions),
+        "question_numbers": ",".join(str(q["new"]) for q in questions),
         "questions": [{"new": q["new"], "text": q["text"][:80]} for q in questions],
     }
 
@@ -480,6 +499,7 @@ def regenerate_map(project: Project) -> dict[str, Any]:
 
     return {
         "count": len(renumbered),
+        "question_numbers": ",".join(str(q["new"]) for q in renumbered),
         "map_written": str(map_path.relative_to(project.root)) if _inside(project.root, map_path) else str(map_path),
         "questions_renumbered": len(questions),
     }

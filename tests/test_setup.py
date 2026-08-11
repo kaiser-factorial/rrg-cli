@@ -178,3 +178,36 @@ def test_regenerate_map_after_editing(ready_project: Project) -> None:
     # Old numbers 3 and 5 should not appear as line starts
     assert "3. Third" not in content
     assert "5. Fifth" not in content
+
+
+
+def test_apply_questions_with_select(ready_project: Project) -> None:
+    """Applying questions with --select keeps only the selected ones, renumbered."""
+    questions_text = """1. First question?
+2. Second question?
+3. Third question?
+4. Fourth question?
+5. Fifth question?
+"""
+    result = apply_questions(ready_project, questions_text, select="1,3,5")
+    assert result["count"] == 3
+    nums = result["question_numbers"]
+    assert nums == "1,2,3"  # renumbered sequentially
+    # Check QUESTIONS.md has only the selected ones, renumbered
+    content = (ready_project.root / "shared/QUESTIONS.md").read_text()
+    assert "1. First question?" in content
+    assert "2. Third question?" in content
+    assert "3. Fifth question?" in content
+    assert "Second" not in content
+    assert "Fourth" not in content
+
+
+def test_apply_questions_select_all(ready_project: Project) -> None:
+    """Without --select, all questions are kept."""
+    questions_text = """1. First?
+2. Second?
+3. Third?
+"""
+    result = apply_questions(ready_project, questions_text)
+    assert result["count"] == 3
+    assert result["question_numbers"] == "1,2,3"

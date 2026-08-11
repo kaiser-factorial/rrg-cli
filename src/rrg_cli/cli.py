@@ -209,7 +209,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_project_args(setup_cmd)
     setup_cmd.add_argument("--status", action="store_true", help="show which setup steps are needed")
     setup_cmd.add_argument("--questions", action="store_true", help="render question extraction prompt")
-    setup_cmd.add_argument("--apply-questions", metavar="FILE", default=None, help="apply extracted questions from a file")
+    setup_cmd.add_argument("--apply-questions", metavar="FILE", default=None, help="apply extracted questions from a file (use - for stdin)")
+    setup_cmd.add_argument("--select", metavar="N,N,...", default=None, help="comma-separated question numbers to keep (e.g. 1,3,5,7)")
     setup_cmd.add_argument("--overview", action="store_true", help="render study overview generation prompt")
     setup_cmd.add_argument("--apply-overview", metavar="FILE", default=None, help="apply generated study overview from a file")
     setup_cmd.add_argument("--instructions", action="store_true", help="render validation instructions generation prompt")
@@ -531,13 +532,21 @@ def run(args: argparse.Namespace) -> int:
                 print(result["text"])
             return 0
         if args.apply_questions:
-            text = project.path(args.apply_questions).read_text(encoding="utf-8", errors="ignore")
-            result = apply_questions(project, text)
+            if args.apply_questions == "-":
+                import sys
+                text = sys.stdin.read()
+            else:
+                # Read from an absolute or relative path (not confined to project root)
+                file_path = Path(args.apply_questions).expanduser().resolve()
+                text = file_path.read_text(encoding="utf-8", errors="ignore")
+            result = apply_questions(project, text, select=args.select)
             if args.json:
                 _emit(result, True)
             else:
+                nums = result.get("question_numbers", "")
                 print(f"Wrote {result['questions_written']} ({result['count']} questions)")
                 print(f"Wrote {result['map_written']}")
+                print(f"Question numbers: {nums}")
             return 0
         if args.overview:
             result = render_study_overview_prompt(project)
@@ -547,7 +556,8 @@ def run(args: argparse.Namespace) -> int:
                 print(result["text"])
             return 0
         if args.apply_overview:
-            text = project.path(args.apply_overview).read_text(encoding="utf-8", errors="ignore")
+            file_path = Path(args.apply_overview).expanduser().resolve()
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
             result = apply_study_overview(project, text)
             if args.json:
                 _emit(result, True)
@@ -562,7 +572,8 @@ def run(args: argparse.Namespace) -> int:
                 print(result["text"])
             return 0
         if args.apply_instructions:
-            text = project.path(args.apply_instructions).read_text(encoding="utf-8", errors="ignore")
+            file_path = Path(args.apply_instructions).expanduser().resolve()
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
             result = apply_validation_instructions(project, text)
             if args.json:
                 _emit(result, True)
