@@ -205,6 +205,17 @@ def build_parser() -> argparse.ArgumentParser:
     eval_cmd.add_argument("--run", required=True, help="run folder path (relative to project root)")
     eval_cmd.add_argument("--json", action="store_true")
 
+    setup_cmd = sub.add_parser("setup", help="automated project setup: generate shared docs from data + origin report")
+    _add_project_args(setup_cmd)
+    setup_cmd.add_argument("--status", action="store_true", help="show which setup steps are needed")
+    setup_cmd.add_argument("--questions", action="store_true", help="render question extraction prompt")
+    setup_cmd.add_argument("--apply-questions", metavar="FILE", default=None, help="apply extracted questions from a file")
+    setup_cmd.add_argument("--overview", action="store_true", help="render study overview generation prompt")
+    setup_cmd.add_argument("--apply-overview", metavar="FILE", default=None, help="apply generated study overview from a file")
+    setup_cmd.add_argument("--instructions", action="store_true", help="render validation instructions generation prompt")
+    setup_cmd.add_argument("--apply-instructions", metavar="FILE", default=None, help="apply generated validation instructions from a file")
+    setup_cmd.add_argument("--json", action="store_true")
+
     alias_cmd = sub.add_parser("alias", help="manage dispatch validator aliases")
     _add_project_args(alias_cmd)
     alias_cmd.add_argument("name", nargs="?", help="alias name (e.g. grok-val)")
@@ -478,6 +489,76 @@ def run(args: argparse.Namespace) -> int:
             _emit(result, True)
         else:
             print(result["report"])
+        return 0
+    if args.command == "setup":
+        from .setup import (
+            setup_status, render_question_extraction_prompt, apply_questions,
+            render_study_overview_prompt, apply_study_overview,
+            render_validation_instructions_prompt, apply_validation_instructions,
+        )
+        if args.status or (not args.questions and not args.apply_questions and
+                            not args.overview and not args.apply_overview and
+                            not args.instructions and not args.apply_instructions):
+            status = setup_status(project)
+            if args.json:
+                _emit(status, True)
+            else:
+                print("RRG Setup Status:")
+                for s in status["steps"]:
+                    symbol = "\u2713" if s["done"] else "\u2717"
+                    action = f"  → {s['action']}" if not s["done"] else ""
+                    print(f"  {symbol} {s['name']}{action}")
+                if status["all_done"]:
+                    print("\n  All setup steps complete!")
+                else:
+                    print("\n  Run the steps above to complete setup.")
+            return 0
+        if args.questions:
+            result = render_question_extraction_prompt(project)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(result["text"])
+            return 0
+        if args.apply_questions:
+            text = project.path(args.apply_questions).read_text(encoding="utf-8", errors="ignore")
+            result = apply_questions(project, text)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(f"Wrote {result['questions_written']} ({result['count']} questions)")
+                print(f"Wrote {result['map_written']}")
+            return 0
+        if args.overview:
+            result = render_study_overview_prompt(project)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(result["text"])
+            return 0
+        if args.apply_overview:
+            text = project.path(args.apply_overview).read_text(encoding="utf-8", errors="ignore")
+            result = apply_study_overview(project, text)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(f"Wrote {result['written']}")
+            return 0
+        if args.instructions:
+            result = render_validation_instructions_prompt(project)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(result["text"])
+            return 0
+        if args.apply_instructions:
+            text = project.path(args.apply_instructions).read_text(encoding="utf-8", errors="ignore")
+            result = apply_validation_instructions(project, text)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(f"Wrote {result['written']}")
+            return 0
         return 0
     if args.command == "alias":
         from .alias import list_aliases, set_alias, remove_alias, generate_shell_file, install_aliases
