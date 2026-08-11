@@ -1,6 +1,6 @@
 # Design brief — pipeline eval harness (live run-logger + auto-metrics)
 
-- **Status:** Brief / not yet built. Written 2026-06-23 (evening) to seed a future build session.
+- **Status:** Partially built. The auto-metrics track (`rrg eval`) is implemented. The voice process-logger track is not built (conclusion: adopt, don't build). The rrg-eval skill (`skills/rrg-eval/SKILL.md`) documents the scientific evaluation methodology (comparison table + divergence analysis). Updated 2025-08-11.
 - **Scope:** evaluate the **RRG pipeline itself** — its process and outcomes as a tool — *not*
   the scientific validation of any origin paper. (That second thing is what RRG already does;
   this measures whether RRG *works well* while doing it.)

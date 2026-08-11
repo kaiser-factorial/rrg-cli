@@ -1,6 +1,6 @@
-# CLI Agent Executor Reference
+# CLI Agent Validator Reference
 
-Extracted commands for all supported RRG dispatch executors.
+Extracted commands for all supported RRG dispatch validators.
 
 ## Summary Table
 
@@ -68,7 +68,7 @@ Extracted commands for all supported RRG dispatch executors.
 - **Status**: TUI-only — no documented non-interactive/print/exec mode
 - **Model selection**: `/model` slash command inside TUI
 - **Resume**: `/resume` slash command inside TUI
-- **Notes**: Cannot be used as an RRG executor until a non-interactive mode is available.
+- **Notes**: Cannot be used as an RRG validator until a non-interactive mode is available.
   Listed here for reference only.
 
 ### OpenRouter (direct API)
@@ -79,7 +79,7 @@ Extracted commands for all supported RRG dispatch executors.
 
 ## Normalized Interface
 
-All executors expose the same RRG dispatch interface:
+All validators expose the same RRG dispatch interface:
 1. `send_turn(prompt, session_id=None) -> (response, session_id, model)`
 2. First call with `session_id=None` creates a new session
 3. Subsequent calls with the returned `session_id` continue the conversation

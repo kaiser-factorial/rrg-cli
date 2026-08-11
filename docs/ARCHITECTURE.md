@@ -25,7 +25,14 @@ never enter packages.
 | `packager` | temporary assembly, lint gate, publication, provenance |
 | `doctor` | dependencies, file references, hashes, routing, prompt preflight |
 | `scorecard` | provisional side-by-side grading skeleton |
-| `gui_service` | generic setup, conversion, packaging, runs, comparison, notes, scorecards |
+| `gui_service` | generic setup, conversion, packaging, runs, comparison, notes, scorecards (parked) |
+| `prefs` | per-project saved defaults (validator, mode, skip_normalize, auto_import) |
+| `dispatch` | one-command round-trip: build → prompt → validator → import → normalize |
+| `normalize` | fuzzy file matching, stat parsing, canonical deliverable shape |
+| `wizard` | interactive 5-step setup walkthrough (health → conversion → preflight → roster → dispatch) |
+| `eval_lite` | pipeline metrics: deliverable contract, breach status, grading status |
+| `tui` | rich terminal UI (Base2Tone Mall palette, ASCII banner, command table) |
+| `alias` | shell aliases for dispatch validators |
 | `gui` | authenticated loopback HTTP boundary and packaged static assets |
 | `cli` | command parsing, structured output, exit codes |
 

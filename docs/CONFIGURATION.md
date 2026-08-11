@@ -9,7 +9,7 @@
 - `files.all`: inputs sent to every enabled stage.
 - `files.stage_specific`: inputs permitted only in listed stages.
 - `files.withheld`: project paths that must never be sent.
-- `roster.<stage>`: validator model, vendor, type, and license records.
+- `roster.<stage>`: validator model, vendor, type, license, and optional `validator` field (hermes/claude/codex/grok/pool/openrouter). Model can be `"default"` to use the validator's own configured model.
 - `stages.<id>`: enablement, degree of freedom, prompt, send list, output/report names.
 - `blinding.always_withhold`: package-relative deny patterns.
 - `blinding.per_stage_methodology`: required and forbidden filename patterns.
@@ -18,6 +18,15 @@
 - `constraints.exclude_vendors`: origin-family or otherwise ineligible validators.
 - `constraints.determinism`: settings copied into provenance.
 - `dispatch`: optional agent start template and model slugs.
+
+## `.rrg_prefs.yaml`
+
+Per-project saved defaults (gitignored):
+- `validator`: manual/hermes/claude/codex/grok/pool/openrouter/prime-agent
+- `mode`: discuss/nodiscuss/agent
+- `skip_normalize`: true/false
+- `auto_import`: true/false
+- `aliases`: map of alias name → {validator, model}
 
 Every path is confined to the project root. Routed top-level files are flattened by
 basename; a collision is a configuration error.

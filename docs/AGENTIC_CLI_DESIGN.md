@@ -1,6 +1,6 @@
 # RRG Agentic CLI Foundation — Design Document
 
-> **Status:** Active design, 2025-08-10. This is the implementation spec for the
+> **Status:** Implemented, 2025-08-11. All modules built and tested. The design
 > agentic CLI phase: prefs, dispatch, normalizer, wizard, and simplified origin intake.
 > Companion: `docs/PHASES.md` (strategic roadmap), `docs/agentic-rrg-parked.md` (the
 > parked vision — this is the first concrete step toward un-parking it).

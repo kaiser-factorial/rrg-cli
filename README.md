@@ -20,6 +20,11 @@ environment with pip 21.2. Data conversion dependencies are installed with the
 package so `rrg convert` works immediately. The TUI requires `rich>=13.0`,
 included in the dependencies.
 
+## Getting started
+
+See **[WALKTHROUGH.md](WALKTHROUGH.md)** for a step-by-step guide to running the
+pipeline from scratch (given a dataset + a report).
+
 ## Start a project
 
 ```bash
@@ -77,7 +82,7 @@ Origin intake
 
 Preferences
   rrg prefs                              view saved preferences
-  rrg prefs --set executor=hermes        set a preference
+  rrg prefs --set validator=hermes        set a preference
   rrg prefs --reset                      reset to defaults
 
 TUI
@@ -127,13 +132,13 @@ Save defaults so you don't need six flags every time. Preferences are per-projec
 stored in `.rrg_prefs.yaml` (gitignored):
 
 ```bash
-rrg prefs --set executor=hermes
+rrg prefs --set validator=hermes
 rrg prefs --set mode=nodiscuss
 rrg prefs              # view current
 rrg prefs --reset      # back to defaults
 ```
 
-Keys: `executor`, `mode`, `skip_normalize`, `auto_import`.
+Keys: `validator`, `mode`, `skip_normalize`, `auto_import`.
 
 ### Output normalizer
 
@@ -183,7 +188,7 @@ The 5 steps:
 2. **Data conversion** — source data, CSV/Parquet derivatives, metadata
 3. **Readiness checks** — preflight (dependencies, inputs, routing, prompts)
 4. **Roster review** — models per stage with vendor/type/license
-5. **Dispatch** — pick stage + model + executor + mode, build, run, import
+5. **Dispatch** — pick stage + model + validator + mode, build, run, import
 
 ## Safety model
 
@@ -221,6 +226,6 @@ rrg gui --workspace /path/to/workspace --open   # multi-project mode
 
 ```bash
 pip install -e '.[dev]'
-pytest                    # 143 tests
+pytest                    # 155 tests
 python -m build
 ```
