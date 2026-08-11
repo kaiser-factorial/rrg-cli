@@ -226,10 +226,11 @@ def check_deliverable_contract(run_path: Path, question_count: int) -> dict[str,
         fig_png = (run_path / f"Q{q}_fig.png").exists()
         summary_json = (raw_dir / f"Q{q}_summary.json").exists()
 
-        # DYFA section check: look for ## Q<n> in the report
-        dyfa = bool(re.search(
-            rf"^##\s*[Qq]0*{q}\b", report_text, re.MULTILINE
-        )) if report_text else False
+        # DYFA section check: look for ## Q<n> or ## Question N in the report
+        dyfa = (
+            bool(re.search(rf"^##\s*[Qq]0*{q}\b", report_text, re.MULTILINE))
+            or bool(re.search(rf"^##\s*[Qq]uestion\s+0*{q}\b", report_text, re.IGNORECASE | re.MULTILINE))
+        ) if report_text else False
 
         q_conform = all([analysis, raw_csv, fig_py, fig_png, summary_json, dyfa])
         if not q_conform:
