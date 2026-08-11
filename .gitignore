@@ -10,3 +10,6 @@ __pycache__/
 .env
 docs/ADVISOR_MEETING.md
 .rrg_prefs.yaml
+examples/*/operator/_packages/
+examples/*/operator/replication_*
+examples/*/operator/robustness_*
