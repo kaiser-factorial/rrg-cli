@@ -1,6 +1,6 @@
-"""Validator dispatch: build → prompt → run executor → collect → import → normalize.
+"""Validator dispatch: build → prompt → run validator → collect → import → normalize.
 
-Executors supported:
+Validators supported:
   - manual:    prints instructions for external execution
   - hermes:    shells out to `hermes -z` (OpenRouter via Hermes agent CLI)
   - claude:    shells out to `claude -p` (Claude Code CLI)
@@ -9,8 +9,8 @@ Executors supported:
   - openrouter: calls the OpenRouter API directly (httpx)
   - prime-agent: spawns a subagent (requires async IPython context)
 
-Multi-turn support: each executor tracks a session ID so turns share conversation
-context. Session IDs are captured from the executor's session management after
+Multi-turn support: each validator tracks a session ID so turns share conversation
+context. Session IDs are captured from the validator's session management after
 the first turn and passed to --resume/--continue for subsequent turns.
 """
 
@@ -40,7 +40,7 @@ from .utils import safe_label
 def _resolve_slug(project: Project, model: str) -> str:
     """Resolve a model name to its dispatch slug from rrg.yaml > dispatch.model_slugs.
 
-    Returns empty string for "default" or empty model — the executor will use
+    Returns empty string for "default" or empty model — the validator will use
     its own configured default model.
     """
     if not model or model.lower() == "default":
@@ -55,7 +55,7 @@ def _resolve_slug(project: Project, model: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Session ID extraction (per executor)
+# Session ID extraction (per validator)
 # ---------------------------------------------------------------------------
 
 def _extract_hermes_session_id(output: str, work_dir: str) -> str | None:
@@ -109,7 +109,7 @@ def _extract_claude_session_id(output: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Executor call functions
+# Validator call functions
 # ---------------------------------------------------------------------------
 
 def _call_openrouter(
@@ -118,7 +118,7 @@ def _call_openrouter(
     """Call the OpenRouter chat completions API directly."""
     import httpx
     if not slug:
-        raise RRGError("openrouter executor requires a model slug; set one in rrg.yaml > dispatch.model_slugs or use a different executor")
+        raise RRGError("openrouter validator requires a model slug; set one in rrg.yaml > dispatch.model_slugs or use a different executor")
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise RRGError("OPENROUTER_API_KEY not set in environment")
@@ -164,7 +164,7 @@ def _exec_hermes_turn(
             pass
         return result.stdout, new_sid, model
     except FileNotFoundError:
-        raise RRGError("hermes CLI not found; install it or use --executor manual")
+        raise RRGError("hermes CLI not found; install it or use --validator manual")
     except subprocess.TimeoutExpired:
         raise RRGError("hermes timed out after 900 seconds")
 
@@ -196,7 +196,7 @@ def _exec_claude_turn(
             pass
         return result.stdout, new_sid, model
     except FileNotFoundError:
-        raise RRGError("claude CLI not found; install it or use --executor manual")
+        raise RRGError("claude CLI not found; install it or use --validator manual")
     except subprocess.TimeoutExpired:
         raise RRGError("claude timed out after 900 seconds")
 
@@ -233,7 +233,7 @@ def _exec_codex_turn(
         text = "\n".join(text_parts) if text_parts else result.stdout
         return text, new_sid, model
     except FileNotFoundError:
-        raise RRGError("codex CLI not found; install it or use --executor manual")
+        raise RRGError("codex CLI not found; install it or use --validator manual")
     except subprocess.TimeoutExpired:
         raise RRGError("codex timed out after 900 seconds")
 
@@ -265,7 +265,7 @@ def _exec_grok_turn(
             pass
         return result.stdout, new_sid, model
     except FileNotFoundError:
-        raise RRGError("grok CLI not found; install it or use --executor manual")
+        raise RRGError("grok CLI not found; install it or use --validator manual")
     except subprocess.TimeoutExpired:
         raise RRGError("grok timed out after 900 seconds")
 
@@ -304,7 +304,7 @@ def _exec_pool_turn(
         text = "\n".join(text_parts) if text_parts else result.stdout
         return text, new_sid, model
     except FileNotFoundError:
-        raise RRGError("pool CLI not found; install it or use --executor manual")
+        raise RRGError("pool CLI not found; install it or use --validator manual")
     except subprocess.TimeoutExpired:
         raise RRGError("pool timed out after 900 seconds")
 
@@ -327,10 +327,10 @@ def _generate_operator_response(turn_title: str, validator_response: str, turn_n
 
 
 # ---------------------------------------------------------------------------
-# Executor dispatch table
+# Validator dispatch table
 # ---------------------------------------------------------------------------
 
-EXECUTORS = {
+VALIDATORS = {
     "manual": None,
     "hermes": _exec_hermes_turn,
     "claude": _exec_claude_turn,
@@ -339,45 +339,45 @@ EXECUTORS = {
     "pool": _exec_pool_turn,
 }
 
-# Executors that support session-based multi-turn
-MULTI_TURN_EXECUTORS = {"hermes", "claude", "codex", "grok", "pool"}
+# Validators that support session-based multi-turn
+MULTI_TURN_VALIDATORS = {"hermes", "claude", "codex", "grok", "pool"}
 
-# Executors that need a slug (model identifier) from rrg.yaml
-SLUG_EXECUTORS = {"hermes", "openrouter"}
+# Validators that need a slug (model identifier) from rrg.yaml
+SLUG_VALIDATORS = {"hermes", "openrouter"}
 
-# Executors where the model flag is optional (use agent's default)
-OPTIONAL_MODEL_EXECUTORS = {"hermes", "codex", "grok", "claude", "pool"}
-
-
+# Validators where the model flag is optional (use agent's default)
+OPTIONAL_MODEL_VALIDATORS = {"hermes", "codex", "grok", "claude", "pool"}
 
 
-def _run_executor(
-    executor: str,
+
+
+def _run_validator(
+    validator: str,
     rendered: Any,
     slug: str,
     work_dir: str,
     mode: str,
 ) -> list[dict[str, Any]]:
-    """Run the multi-turn executor loop. Returns conversation history."""
+    """Run the multi-turn validator loop. Returns conversation history."""
     conversation: list[dict[str, Any]] = []
     session_id: str | None = None
     messages: list[dict[str, str]] = []  # for openrouter conversation accumulation
 
     detected_model: str | None = None
     for i, turn in enumerate(rendered.turns, 1):
-        if executor == "openrouter":
+        if validator == "openrouter":
             messages.append({"role": "user", "content": turn.text})
             response = _call_openrouter(turn.text, slug, messages)
             messages.append({"role": "assistant", "content": response})
             detected_model = slug
         else:
-            # Look up the executor function by name so mocks can patch it
+            # Look up the validator function by name so mocks can patch it
             import sys
-            exec_fn = getattr(sys.modules[__name__], f"_exec_{executor}_turn", None)
+            exec_fn = getattr(sys.modules[__name__], f"_exec_{validator}_turn", None)
             if exec_fn is None:
-                raise RRGError(f"executor not implemented: {executor}")
+                raise RRGError(f"validator not implemented: {validator}")
 
-            if executor in SLUG_EXECUTORS:
+            if validator in SLUG_VALIDATORS:
                 response, session_id, model = exec_fn(turn.text, slug, work_dir, session_id)
             else:
                 response, session_id, model = exec_fn(turn.text, work_dir, session_id)
@@ -390,20 +390,20 @@ def _run_executor(
             "prompt": turn.text,
             "response": response,
             "session_id": session_id,
-            "model": model if executor != "openrouter" else slug,
+            "model": model if validator != "openrouter" else slug,
         })
 
         # Agent mode: generate operator responses for discuss turns
         if mode == "agent" and "discuss" in turn.title.lower():
             op_response = _generate_operator_response(turn.title, response, i)
-            if executor == "openrouter":
+            if validator == "openrouter":
                 messages.append({"role": "user", "content": op_response})
                 op_reply = _call_openrouter(op_response, slug, messages)
                 messages.append({"role": "assistant", "content": op_reply})
             else:
                 import sys as _sys
-                _exec_fn = getattr(_sys.modules[__name__], f"_exec_{executor}_turn", None)
-                if executor in SLUG_EXECUTORS:
+                _exec_fn = getattr(_sys.modules[__name__], f"_exec_{validator}_turn", None)
+                if validator in SLUG_VALIDATORS:
                     op_reply, session_id, _ = _exec_fn(op_response, slug, work_dir, session_id)
                 else:
                     op_reply, session_id, _ = _exec_fn(op_response, work_dir, session_id)
@@ -417,7 +417,7 @@ def _run_executor(
             })
 
     # For openrouter, write the final response to the work dir as a file
-    if executor == "openrouter" and conversation:
+    if validator == "openrouter" and conversation:
         final = conversation[-1]["response"]
         (Path(work_dir) / "SUMMARY.md").write_text(final, encoding="utf-8")
 
@@ -428,21 +428,21 @@ def _run_executor(
 # Model provenance extraction (fallback when JSON output doesn't include model)
 # ---------------------------------------------------------------------------
 
-def _get_model_provenance(executor: str, slug: str) -> str:
-    """Best-effort extraction of the model name used by an executor.
+def _get_model_provenance(validator: str, slug: str) -> str:
+    """Best-effort extraction of the model name used by a validator.
 
-    For executors that don't take a model flag or whose JSON output didn't
+    For validators that don't take a model flag or whose JSON output didn't
     include the model, this reads the agent's config to find the default model.
     """
-    if executor == "hermes" and slug:
+    if validator == "hermes" and slug:
         return slug
-    if executor == "openrouter" and slug:
+    if validator == "openrouter" and slug:
         return slug
 
     import os
     home = os.path.expanduser("~")
 
-    if executor == "hermes":
+    if validator == "hermes":
         try:
             result = subprocess.run(
                 ["hermes", "status"], capture_output=True, text=True, timeout=10,
@@ -454,7 +454,7 @@ def _get_model_provenance(executor: str, slug: str) -> str:
             pass
         return "hermes-default"
 
-    if executor == "codex":
+    if validator == "codex":
         config_path = os.path.join(home, ".codex", "config.toml")
         if os.path.exists(config_path):
             with open(config_path) as f:
@@ -463,7 +463,7 @@ def _get_model_provenance(executor: str, slug: str) -> str:
                         return line.split("=")[1].strip().strip("\"")
         return "codex-default"
 
-    if executor == "grok":
+    if validator == "grok":
         cache_path = os.path.join(home, ".grok", "models_cache.json")
         if os.path.exists(cache_path):
             try:
@@ -476,13 +476,13 @@ def _get_model_provenance(executor: str, slug: str) -> str:
                 pass
         return "grok-default"
 
-    if executor == "claude":
+    if validator == "claude":
         return "claude-default"
 
-    if executor == "pool":
+    if validator == "pool":
         return "poolside-default"
 
-    return f"{executor}-default"
+    return f"{validator}-default"
 
 
 # ---------------------------------------------------------------------------
@@ -558,7 +558,7 @@ def dispatch(
     stage: str,
     model: str,
     *,
-    executor: str | None = None,
+    validator: str | None = None,
     mode: str | None = None,
     label: str | None = None,
     dry_run: bool = False,
@@ -571,17 +571,17 @@ def dispatch(
 
     1. Build (or reuse) the package.
     2. Render the prompt for the given mode.
-    3. Execute via the chosen executor (manual/hermes/claude/codex/grok/openrouter/prime-agent).
+    3. Execute via the chosen validator (manual/hermes/claude/codex/grok/openrouter/prime-agent).
     4. (Optionally) import results and normalize.
     """
     prefs = load_prefs(project)
-    # If executor not explicitly passed, check the roster entry for an executor field
-    if not executor:
+    # If validator not explicitly passed, check the roster entry for a validator field
+    if not validator:
         roster_entry = project.model(stage, model)
-        if roster_entry and roster_entry.get("executor"):
-            executor = roster_entry["executor"]
-    if not executor:
-        executor = prefs.get("executor", "manual")
+        if roster_entry and roster_entry.get("validator"):
+            validator = roster_entry["validator"]
+    if not validator:
+        validator = prefs.get("validator", "manual")
     mode = mode or prefs.get("mode", "discuss")
     if skip_normalize is None:
         skip_normalize = prefs.get("skip_normalize", False)
@@ -597,7 +597,7 @@ def dispatch(
     if pkg_result["blocked"]:
         return {
             "package": pkg_result, "prompt": None, "zip_path": None,
-            "executor": executor, "mode": mode, "conversation": [],
+            "validator": validator, "mode": mode, "conversation": [],
             "import_result": None, "normalize_result": None,
             "instructions": "Package blocked by blinding lint. Use --force to override.",
         }
@@ -618,7 +618,7 @@ def dispatch(
     instructions = ""
     collected_dir: Path | None = None
 
-    if executor == "manual":
+    if validator == "manual":
         instructions = _format_manual_instructions(zip_path, rendered, stage, model, run_id)
         # In agent mode, generate the conversation plan for reference
         if mode == "agent":
@@ -627,13 +627,13 @@ def dispatch(
                 if "discuss" in turn.title.lower():
                     op = _generate_operator_response(turn.title, "", i)
                     conversation.append({"turn": i, "title": "Operator response (agent)", "prompt": op, "response": ""})
-    elif executor == "prime-agent":
-        raise RRGError("prime-agent executor requires the async IPython context; "
-                        "use it from a prime-agent session or choose --executor manual/hermes/claude/codex/grok/openrouter")
+    elif validator == "prime-agent":
+        raise RRGError("prime-agent validator requires the async IPython context; "
+                        "use it from a prime-agent session or choose --validator manual/hermes/claude/codex/grok/openrouter")
     else:
-        # Non-manual executors: create temp work dir, extract zip, run turns
+        # Non-manual validators: create temp work dir, extract zip, run turns
         collected_dir = Path(tempfile.mkdtemp(prefix="rrg_dispatch_"))
-        slug = _resolve_slug(project, model) if executor in SLUG_EXECUTORS else ""
+        slug = _resolve_slug(project, model) if validator in SLUG_VALIDATORS else ""
 
         # Extract the package zip into the work dir so the validator has the files
         if zip_path and Path(zip_path).exists():
@@ -646,7 +646,7 @@ def dispatch(
             if marker.exists():
                 marker.unlink()
 
-        conversation = _run_executor(executor, rendered, slug, str(collected_dir), mode)
+        conversation = _run_validator(validator, rendered, slug, str(collected_dir), mode)
 
     # Step 4: Import
     import_result: dict[str, Any] | None = None
@@ -666,12 +666,12 @@ def dispatch(
                     if entry.get("model"):
                         detected_model = entry["model"]
                         break
-            model_name = detected_model or _get_model_provenance(executor, slug if executor in SLUG_EXECUTORS else "")
+            model_name = detected_model or _get_model_provenance(validator, slug if validator in SLUG_VALIDATORS else "")
 
             import_result = import_run(
                 project, stage, model, collected_dir,
                 run_id=run_id, normalize=not skip_normalize,
-                executor=executor, model_provenance=model_name,
+                validator=validator, model_provenance=model_name,
             )
         shutil.rmtree(collected_dir, ignore_errors=True)
 
@@ -686,11 +686,11 @@ def dispatch(
             if entry.get("model"):
                 detected_model = entry["model"]
                 break
-    model_name = detected_model or _get_model_provenance(executor, slug if executor in SLUG_EXECUTORS else "")
+    model_name = detected_model or _get_model_provenance(validator, slug if validator in SLUG_VALIDATORS else "")
 
     return {
         "package": pkg_result, "prompt": prompt_summary, "zip_path": zip_path,
-        "executor": executor, "mode": mode, "conversation": conversation,
+        "validator": validator, "mode": mode, "conversation": conversation,
         "import_result": import_result, "normalize_result": normalize_result,
         "instructions": instructions,
         "model_provenance": model_name,

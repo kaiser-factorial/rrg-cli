@@ -29,11 +29,11 @@ def test_tui_run_non_interactive(ready_project: Project, capsys) -> None:
 
 def test_tui_prefs_editor(ready_project: Project, capsys) -> None:
     """run_tui_prefs works with mocked input."""
-    with patch("rich.prompt.Prompt.ask", side_effect=["executor", "hermes"]):
+    with patch("rich.prompt.Prompt.ask", side_effect=["validator", "hermes"]):
         run_tui_prefs(ready_project)
     from rrg_cli.prefs import load_prefs
     prefs = load_prefs(ready_project)
-    assert prefs["executor"] == "hermes"
+    assert prefs["validator"] == "hermes"
 
 
 def test_tui_eval(ready_project: Project, tmp_path: Path, capsys) -> None:
@@ -61,4 +61,4 @@ def test_print_prefs_table(ready_project: Project, capsys) -> None:
     prefs = load_prefs(ready_project)
     _print_prefs_table(prefs)
     captured = capsys.readouterr()
-    assert "executor" in captured.out
+    assert "validator" in captured.out

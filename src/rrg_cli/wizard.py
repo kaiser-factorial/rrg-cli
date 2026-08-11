@@ -16,7 +16,7 @@ from .doctor import inspect_project
 from .errors import RRGError
 from .prefs import (
     DEFAULTS,
-    EXECUTOR_OPTIONS,
+    VALIDATOR_OPTIONS,
     MODE_OPTIONS,
     PREF_KEYS,
     load_prefs,
@@ -147,7 +147,7 @@ def _check_roster(project: Project) -> dict[str, Any]:
             "models": [
                 {
                     "model": m.get("model", ""),
-                    "executor": m.get("executor", ""),
+                    "validator": m.get("validator", ""),
                     "vendor": m.get("vendor", ""),
                     "type": m.get("type", ""),
                     "license": m.get("license", ""),
@@ -167,9 +167,9 @@ def _step_dispatch(project: Project) -> dict[str, Any]:
     prefs = load_prefs(project)
     return {
         "name": "dispatch",
-        "status": "skipped" if prefs.get("executor") == "manual" else "ok",
+        "status": "skipped" if prefs.get("validator") == "manual" else "ok",
         "checks": [
-            {"name": "executor", "status": "ok", "detail": prefs.get("executor", "manual")},
+            {"name": "validator", "status": "ok", "detail": prefs.get("validator", "manual")},
             {"name": "mode", "status": "ok", "detail": prefs.get("mode", "discuss")},
         ],
     }
@@ -253,7 +253,7 @@ def wizard_prefs_editor(project: Project) -> dict[str, Any]:
         print(f"  {key}: {prefs.get(key)}")
 
     print(f"\nOptions:")
-    print(f"  executor: {', '.join(EXECUTOR_OPTIONS)}")
+    print(f"  validator: {', '.join(VALIDATOR_OPTIONS)}")
     print(f"  mode: {', '.join(MODE_OPTIONS)}")
     print(f"  skip_normalize: true, false")
     print(f"  auto_import: true, false")
@@ -277,7 +277,7 @@ def wizard_prefs_editor(project: Project) -> dict[str, Any]:
         return prefs
 
     options = {
-        "executor": EXECUTOR_OPTIONS,
+        "validator": VALIDATOR_OPTIONS,
         "mode": MODE_OPTIONS,
     }.get(key)
 

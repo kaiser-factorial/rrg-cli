@@ -1,0 +1,21 @@
+{
+  "question": "Do male and female viewers rate Shrek (2001) differently?",
+  "n": 984,
+  "groups": {
+    "female": {
+      "n": 743,
+      "mean": 3.1555
+    },
+    "male": {
+      "n": 241,
+      "mean": 3.083
+    }
+  },
+  "test": "Two-sample Kolmogorov-Smirnov",
+  "statistic": 0.09796552051512591,
+  "p_value": 0.05608204072286342,
+  "effect_size": null,
+  "multiplicity": "No correction; single pre-specified comparison",
+  "conclusion": "No significant difference in Shrek (2001) ratings between male and female viewers at alpha=0.005 (D=0.0980, p=5.608204e-02).",
+  "movie": "Shrek (2001)"
+}

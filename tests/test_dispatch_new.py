@@ -1,5 +1,5 @@
 \
-"""Tests for the dispatch command (build → prompt → executor → import → normalize)."""
+"""Tests for the dispatch command (build → prompt → validator → import → normalize)."""
 
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ from rrg_cli.dispatch import dispatch, _generate_operator_response
 from rrg_cli.prefs import save_prefs, DEFAULTS
 
 
-# --- Manual executor ---
+# --- Manual validator ---
 
 def test_dispatch_manual_prints_instructions(ready_project: Project) -> None:
-    result = dispatch(ready_project, "replication", "ReplicationModel", executor="manual")
-    assert result["executor"] == "manual"
+    result = dispatch(ready_project, "replication", "ReplicationModel", validator="manual")
+    assert result["validator"] == "manual"
     assert result["package"]["blocked"] is False
     assert result["package"]["published"] is True
     assert "zip_path" in result
@@ -32,7 +32,7 @@ def test_dispatch_manual_prints_instructions(ready_project: Project) -> None:
 
 def test_dispatch_dry_run(ready_project: Project) -> None:
     result = dispatch(ready_project, "replication", "ReplicationModel",
-                      executor="manual", dry_run=True)
+                      validator="manual", dry_run=True)
     assert result["package"]["dry_run"] is True
     assert result["package"]["published"] is False
     # Dry run should not produce a zip
@@ -41,10 +41,10 @@ def test_dispatch_dry_run(ready_project: Project) -> None:
 
 def test_dispatch_reuse_skips_build(ready_project: Project) -> None:
     # First dispatch to build
-    first = dispatch(ready_project, "replication", "ReplicationModel", executor="manual")
+    first = dispatch(ready_project, "replication", "ReplicationModel", validator="manual")
     # Second dispatch with reuse=True should find the existing package
     second = dispatch(ready_project, "replication", "ReplicationModel",
-                      executor="manual", reuse=True)
+                      validator="manual", reuse=True)
     assert second["package"]["run_id"] == first["package"]["run_id"]
 
 
@@ -53,13 +53,13 @@ def test_dispatch_blocked_package(ready_project: Project) -> None:
     # by making it a robustness dispatch (methodology forbidden) but sending it anyway.
     # Actually, simpler: just test that --force works on a failing package.
     # For now, test that a normal dispatch is not blocked.
-    result = dispatch(ready_project, "replication", "ReplicationModel", executor="manual")
+    result = dispatch(ready_project, "replication", "ReplicationModel", validator="manual")
     assert result["package"]["blocked"] is False
 
 
 def test_dispatch_force(ready_project: Project) -> None:
     result = dispatch(ready_project, "replication", "ReplicationModel",
-                      executor="manual", force=True)
+                      validator="manual", force=True)
     assert result["package"]["blocked"] is False
 
 
@@ -67,7 +67,7 @@ def test_dispatch_force(ready_project: Project) -> None:
 
 def test_dispatch_mode_nodiscuss_filters_turns(ready_project: Project) -> None:
     result = dispatch(ready_project, "robustness", "RobustnessModel",
-                      executor="manual", mode="nodiscuss")
+                      validator="manual", mode="nodiscuss")
     # The robustness prompt has discuss turns (3-5) and non-discuss turns (1-2, 6-7).
     # In nodiscuss mode, discuss turns should be filtered out.
     turns = result["prompt"]["turns"]
@@ -78,7 +78,7 @@ def test_dispatch_mode_nodiscuss_filters_turns(ready_project: Project) -> None:
 
 def test_dispatch_mode_discuss_includes_discuss_turns(ready_project: Project) -> None:
     result = dispatch(ready_project, "robustness", "RobustnessModel",
-                      executor="manual", mode="discuss")
+                      validator="manual", mode="discuss")
     turns = result["prompt"]["turns"]
     # Discuss mode should include discuss-tagged turns
     assert any("discuss" in t["title"].lower() or "lock" in t["title"].lower() for t in turns)
@@ -88,7 +88,7 @@ def test_dispatch_mode_discuss_includes_discuss_turns(ready_project: Project) ->
 
 def test_dispatch_agent_generates_operator_responses(ready_project: Project) -> None:
     result = dispatch(ready_project, "robustness", "RobustnessModel",
-                      executor="manual", mode="agent")
+                      validator="manual", mode="agent")
     # Agent mode should have generated operator responses for discuss turns
     assert len(result["conversation"]) > 0
     # Each conversation entry should have a turn number and prompt
@@ -104,28 +104,28 @@ def test_generate_operator_response_simple():
     assert len(response) > 0
 
 
-# --- Hermes executor (mocked) ---
+# --- Hermes validator (mocked) ---
 
 def test_dispatch_hermes_shells_out(ready_project: Project, tmp_path: Path) -> None:
     with patch("rrg_cli.dispatch._exec_hermes_turn") as mock_hermes:
         mock_hermes.return_value = ("I will analyze the data.\n\n```python\nprint('hello')\n```", "session123", "qwen/qwen3.7-max")
         result = dispatch(ready_project, "replication", "ReplicationModel",
-                          executor="hermes", mode="nodiscuss",
+                          validator="hermes", mode="nodiscuss",
                           auto_import=False)
-        assert result["executor"] == "hermes"
+        assert result["validator"] == "hermes"
         assert len(result["conversation"]) > 0
         assert mock_hermes.call_count > 0
 
 
-# --- OpenRouter executor (mocked) ---
+# --- OpenRouter validator (mocked) ---
 
 def test_dispatch_openrouter_api_call(ready_project: Project) -> None:
     with patch("rrg_cli.dispatch._call_openrouter") as mock_or:
         mock_or.return_value = "Analysis complete. N=100, t=2.5, p=0.01"
         result = dispatch(ready_project, "replication", "ReplicationModel",
-                          executor="openrouter", mode="nodiscuss",
+                          validator="openrouter", mode="nodiscuss",
                           auto_import=False)
-        assert result["executor"] == "openrouter"
+        assert result["validator"] == "openrouter"
         assert len(result["conversation"]) > 0
         assert mock_or.call_count > 0
 
@@ -135,13 +135,13 @@ def test_dispatch_openrouter_api_call(ready_project: Project) -> None:
 def test_dispatch_auto_import(ready_project: Project, tmp_path: Path) -> None:
     with patch("rrg_cli.dispatch._exec_hermes_turn") as mock_hermes:
         mock_hermes.return_value = ("Done.", "session123", "qwen/qwen3.7-max")
-        # Make the executor produce some output files
+        # Make the validator produce some output files
         def side_effect(prompt, slug, work_dir, session_id=None):
             (Path(work_dir) / "SUMMARY.md").write_text("## Q1\nok")
             return ("Done.", "session123", "qwen/qwen3.7-max")
         mock_hermes.side_effect = side_effect
         result = dispatch(ready_project, "replication", "ReplicationModel",
-                          executor="hermes", mode="nodiscuss",
+                          validator="hermes", mode="nodiscuss",
                           auto_import=True)
         assert result["import_result"] is not None
         assert result["import_result"]["count"] > 0
@@ -151,7 +151,7 @@ def test_dispatch_no_auto_import(ready_project: Project) -> None:
     with patch("rrg_cli.dispatch._exec_hermes_turn") as mock_hermes:
         mock_hermes.return_value = ("Done.", "session123", "qwen/qwen3.7-max")
         result = dispatch(ready_project, "replication", "ReplicationModel",
-                          executor="hermes", mode="nodiscuss",
+                          validator="hermes", mode="nodiscuss",
                           auto_import=False)
         assert result["import_result"] is None
 
@@ -163,7 +163,7 @@ def test_dispatch_skip_normalize(ready_project: Project) -> None:
             return ("Done.", "session123", "qwen/qwen3.7-max")
         mock_hermes.side_effect = side_effect
         result = dispatch(ready_project, "replication", "ReplicationModel",
-                          executor="hermes", mode="nodiscuss",
+                          validator="hermes", mode="nodiscuss",
                           skip_normalize=True)
         assert result["import_result"]["normalize"] is None
 
@@ -171,31 +171,31 @@ def test_dispatch_skip_normalize(ready_project: Project) -> None:
 # --- Prefs integration ---
 
 def test_dispatch_with_prefs(ready_project: Project) -> None:
-    save_prefs(ready_project, {"executor": "manual", "mode": "nodiscuss"})
-    # No executor/mode flags → should use prefs
+    save_prefs(ready_project, {"validator": "manual", "mode": "nodiscuss"})
+    # No validator/mode flags → should use prefs
     result = dispatch(ready_project, "replication", "ReplicationModel",
-                      executor=None, mode=None)
-    assert result["executor"] == "manual"
+                      validator=None, mode=None)
+    assert result["validator"] == "manual"
     assert result["mode"] == "nodiscuss"
 
 
 def test_dispatch_flags_override_prefs(ready_project: Project) -> None:
-    save_prefs(ready_project, {"executor": "manual", "mode": "nodiscuss"})
+    save_prefs(ready_project, {"validator": "manual", "mode": "nodiscuss"})
     result = dispatch(ready_project, "replication", "ReplicationModel",
-                      executor="manual", mode="discuss")
+                      validator="manual", mode="discuss")
     assert result["mode"] == "discuss"  # flag wins
 
 
 
-# --- Pool executor (mocked) ---
+# --- Pool validator (mocked) ---
 
 def test_dispatch_pool_shells_out(ready_project: Project) -> None:
     with patch("rrg_cli.dispatch._exec_pool_turn") as mock_pool:
         mock_pool.return_value = ("Analysis complete.", "run_123", "poolside-default")
         result = dispatch(ready_project, "replication", "ReplicationModel",
-                          executor="pool", mode="nodiscuss",
+                          validator="pool", mode="nodiscuss",
                           auto_import=False)
-        assert result["executor"] == "pool"
+        assert result["validator"] == "pool"
         assert len(result["conversation"]) > 0
         assert mock_pool.call_count > 0
 
@@ -204,6 +204,6 @@ def test_dispatch_pool_shells_out(ready_project: Project) -> None:
 
 def test_model_provenance_extracted(ready_project: Project) -> None:
     result = dispatch(ready_project, "replication", "ReplicationModel",
-                      executor="manual", mode="discuss")
+                      validator="manual", mode="discuss")
     assert "model_provenance" in result
     assert result["model_provenance"] is not None

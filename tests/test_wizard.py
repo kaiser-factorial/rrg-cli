@@ -69,16 +69,16 @@ def test_wizard_jump_to_step(ready_project: Project) -> None:
 
 
 def test_wizard_prefs_editor_sets_value(ready_project: Project) -> None:
-    # Simulate the user choosing to set executor to hermes
-    with patch("builtins.input", side_effect=["executor", "hermes", ""]):
+    # Simulate the user choosing to set validator to hermes
+    with patch("builtins.input", side_effect=["validator", "hermes", ""]):
         result = wizard_prefs_editor(ready_project)
     prefs = load_prefs(ready_project)
-    assert prefs["executor"] == "hermes"
+    assert prefs["validator"] == "hermes"
 
 
 def test_wizard_prefs_reset(ready_project: Project) -> None:
     from rrg_cli.prefs import save_prefs
-    save_prefs(ready_project, {"executor": "hermes", "mode": "agent"})
+    save_prefs(ready_project, {"validator": "hermes", "mode": "agent"})
     with patch("builtins.input", side_effect=["reset", ""]):
         result = wizard_prefs_editor(ready_project)
     prefs = load_prefs(ready_project)

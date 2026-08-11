@@ -1,0 +1,25 @@
+{
+  "question": "Are newer movies rated differently from older movies?",
+  "n": 112214,
+  "groups": {
+    "older": {
+      "n_movies": 197,
+      "n_ratings": 46524,
+      "mean": 2.8123,
+      "year_range": "1960-1998"
+    },
+    "newer": {
+      "n_movies": 203,
+      "n_ratings": 65690,
+      "mean": 2.8438,
+      "year_range": "1999-2016"
+    }
+  },
+  "test": "Two-sample Kolmogorov-Smirnov",
+  "statistic": 0.011157978179661465,
+  "p_value": 0.002251935928322437,
+  "effect_size": null,
+  "multiplicity": "No correction; single pre-specified comparison",
+  "conclusion": "Rating distributions differ significantly between older and newer movies at alpha=0.005 (D=0.0112, p=2.251936e-03).",
+  "median_year_threshold": 1999
+}

@@ -1,0 +1,3 @@
+group,n,mean_rating,median_rating,std_rating
+only_child,151,3.347682119205298,3.5,0.8137749853407696
+has_siblings,776,3.481958762886598,4.0,0.7177314478892444

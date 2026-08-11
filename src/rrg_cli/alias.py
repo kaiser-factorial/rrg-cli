@@ -1,15 +1,15 @@
-"""Alias system for RRG dispatch executors.
+"""Alias system for RRG dispatch validators.
 
-Creates short shell aliases that map to `rrg dispatch --executor X` so you
-can type `grok-val "prompt"` instead of `rrg dispatch --executor grok --stage ...`.
+Creates short shell aliases that map to `rrg dispatch --validator X` so you
+can type `grok-val "prompt"` instead of `rrg dispatch --validator grok --stage ...`.
 
 Aliases are stored in .rrg_prefs.yaml under the `aliases` key:
     aliases:
-        grok-val: {executor: grok}
-        codex-val: {executor: codex, model: gpt-5.6-terra}
+        grok-val: {validator: grok}
+        codex-val: {validator: codex, model: gpt-5.6-terra}
 
 Each alias generates a shell function that:
-  - Calls `rrg dispatch` with the alias's executor and model
+  - Calls `rrg dispatch` with the alias's validator and model
   - Passes through all extra arguments (like --continue, --resume, --stage)
   - Can be sourced from ~/.rrg_aliases.sh
 """
@@ -49,17 +49,17 @@ def list_aliases(project: Project) -> dict[str, dict[str, str]]:
     return prefs.get("aliases", {}) or {}
 
 
-def set_alias(project: Project, name: str, executor: str, model: str | None = None) -> dict[str, Any]:
+def set_alias(project: Project, name: str, validator: str, model: str | None = None) -> dict[str, Any]:
     """Create or update an alias."""
     name = _normalize_alias_name(name)
     prefs = load_prefs(project)
     aliases = prefs.get("aliases", {}) or {}
-    alias_entry = {"executor": executor}
+    alias_entry = {"validator": validator}
     if model:
         alias_entry["model"] = model
     aliases[name] = alias_entry
     save_prefs(project, {"aliases": aliases})
-    return {"name": name, "executor": executor, "model": model or "(default)"}
+    return {"name": name, "validator": validator, "model": model or "(default)"}
 
 
 def remove_alias(project: Project, name: str) -> dict[str, Any]:
@@ -73,11 +73,11 @@ def remove_alias(project: Project, name: str) -> dict[str, Any]:
     return {"removed": True, "name": name}
 
 
-def generate_shell_function(name: str, executor: str, model: str | None = None) -> str:
+def generate_shell_function(name: str, validator: str, model: str | None = None) -> str:
     """Generate a shell function for an alias."""
     name = _normalize_alias_name(name)
     # Build the base command
-    parts = ["rrg", "dispatch", "--executor", shlex.quote(executor)]
+    parts = ["rrg", "dispatch", "--validator", shlex.quote(validator)]
     if model:
         parts.extend(["--model", shlex.quote(model)])
     base_cmd = " ".join(parts)
@@ -86,7 +86,7 @@ def generate_shell_function(name: str, executor: str, model: str | None = None) 
     # to use as the session continuation mechanism.
     return f"""\
 {name}() {{
-    # Alias: {name} → rrg dispatch --executor {executor}{f" --model {model}" if model else ""}
+    # Alias: {name} → rrg dispatch --validator {validator}{f" --model {model}" if model else ""}
     # Usage: {name} --stage S --model M [other rrg dispatch flags]
     #   {name} --stage replication --model "Qwen"  # first call
     #   {name} --stage replication --model "Qwen" --reuse  # reuse package
@@ -99,9 +99,9 @@ def generate_shell_file(project: Project) -> str:
     aliases = list_aliases(project)
     lines = [SHELL_HEADER]
     for name, entry in sorted(aliases.items()):
-        executor = entry.get("executor", "manual")
+        validator = entry.get("validator", "manual")
         model = entry.get("model")
-        lines.append(generate_shell_function(name, executor, model))
+        lines.append(generate_shell_function(name, validator, model))
         lines.append("")
     lines.append(SHELL_FOOTER)
     return "\n".join(lines)

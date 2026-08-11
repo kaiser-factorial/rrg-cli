@@ -88,25 +88,25 @@ def lookup_provenance(project: Project, run_id: str) -> dict[str, Any] | None:
 
 def _run_folder_name(
     stage_id: str, run_label: str, run_id: str | None,
-    executor: str | None = None, model_provenance: str | None = None,
+    validator: str | None = None, model_provenance: str | None = None,
 ) -> str:
     """Build a descriptive run folder name.
 
-    With executor + model_provenance (the modern path):
-        {stage}_{executor}_{model-slug}_{YYYY-MM-DD}__{run_id}
+    With validator + model_provenance (the modern path):
+        {stage}_{validator}_{model-slug}_{YYYY-MM-DD}__{run_id}
     Without (backward compat):
         {stage}_{run_label}__{run_id}
     """
     from datetime import date
     today = date.today().isoformat()
 
-    if executor and model_provenance:
+    if validator and model_provenance:
         # Normalize model provenance to a filesystem-safe slug
         model_slug = re.sub(r"[^A-Za-z0-9._-]", "-", model_provenance).strip("-.")
         # Remove provider prefix (e.g. "qwen/qwen3.7-max" → "qwen3.7-max")
         if "/" in model_slug:
             model_slug = model_slug.split("/")[-1]
-        return f"{stage_id}_{executor}_{model_slug}_{today}__{run_id or 'norunid'}"
+        return f"{stage_id}_{validator}_{model_slug}_{today}__{run_id or 'norunid'}"
     else:
         return f"{stage_id}_{run_label}__{run_id or 'norunid'}"
 
@@ -114,12 +114,12 @@ def _run_folder_name(
 def run_output_folder(
     project: Project, stage_id: str, run_label: str, run_id: str | None = None,
     *,
-    executor: str | None = None, model_provenance: str | None = None,
+    validator: str | None = None, model_provenance: str | None = None,
 ) -> Path:
     """Resolve the operator-side run folder for a (stage, model) pair.
 
-    With executor + model_provenance, the folder is descriptively named:
-        {stage}_{executor}_{model}_{date}__{run_id}
+    With validator + model_provenance, the folder is descriptively named:
+        {stage}_{validator}_{model}_{date}__{run_id}
     Without, falls back to the legacy naming: {stage}_{model}__{run_id}
 
     When no run_id is given, resolves the newest matching folder.
@@ -128,15 +128,15 @@ def run_output_folder(
     operator_root = project.path_setting("operator", "operator")
 
     if run_id:
-        name = _run_folder_name(stage_id, run_label, run_id, executor, model_provenance)
+        name = _run_folder_name(stage_id, run_label, run_id, validator, model_provenance)
         return operator_root / name
     # No run_id — try to find an existing folder
-    if executor and model_provenance:
+    if validator and model_provenance:
         # Search by prefix pattern (date varies)
         model_slug = re.sub(r"[^A-Za-z0-9._-]", "-", model_provenance).strip("-.")
         if "/" in model_slug:
             model_slug = model_slug.split("/")[-1]
-        prefix = f"{stage_id}_{executor}_{model_slug}_"
+        prefix = f"{stage_id}_{validator}_{model_slug}_"
     else:
         prefix = f"{stage_id}_{run_label}"
     if operator_root.is_dir():
@@ -231,7 +231,7 @@ def _write_run_info(
     run_id: str | None,
     run_value: str,
     *,
-    executor: str | None = None,
+    validator: str | None = None,
     model_provenance: str | None = None,
     breach: dict[str, Any] | None = None,
     normalize_result: dict[str, Any] | None = None,
@@ -250,7 +250,7 @@ def _write_run_info(
         "| Field | Value |",
         "|-------|-------|",
         f"| Stage | {stage} |",
-        f"| Executor | {executor or 'manual'} |",
+        f"| Validator | {validator or 'manual'} |",
         f"| Model | {model_provenance or model or 'unknown'} |",
         f"| Roster model | {model or 'N/A'} |",
         f"| Run ID | {run_id or 'N/A'} |",
@@ -285,7 +285,7 @@ def import_run(
     label: str | None = None,
     run_id: str | None = None,
     normalize: bool = True,
-    executor: str | None = None,
+    validator: str | None = None,
     model_provenance: str | None = None,
 ) -> dict[str, Any]:
     if source is None:
@@ -316,7 +316,7 @@ def import_run(
     run_label = label or safe_label(roster_entry.get("model") if roster_entry else model_query)
     destination = run_output_folder(
         project, stage_id, run_label, run_id,
-        executor=executor, model_provenance=model_provenance,
+        validator=validator, model_provenance=model_provenance,
     ).resolve()
 
     destination.mkdir(parents=True, exist_ok=True)
@@ -361,7 +361,7 @@ def import_run(
     # Auto-write RUN_INFO.md with run metadata
     _write_run_info(
         destination, stage_id, model_query, run_id, run_value,
-        executor=executor, model_provenance=model_provenance,
+        validator=validator, model_provenance=model_provenance,
         breach=breach, normalize_result=normalize_result,
     )
 
@@ -376,6 +376,6 @@ def import_run(
         "count": len(imported),
         "breach": breach,
         "normalize": normalize_result,
-        "executor": executor,
+        "validator": validator,
         "model_provenance": model_provenance,
     }

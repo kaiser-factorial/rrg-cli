@@ -1,0 +1,3 @@
+group,n_movies,n_ratings,mean_rating,median_rating,std_rating
+high_popularity,200,90214,2.9234764005586715,3.0,1.015536355911161
+low_popularity,200,22000,2.450613636363636,2.5,1.1297041389816325

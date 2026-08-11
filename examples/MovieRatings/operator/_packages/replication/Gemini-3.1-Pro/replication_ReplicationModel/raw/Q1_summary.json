@@ -1,0 +1,25 @@
+{
+  "question": "Are movies with more observed ratings rated higher than movies with fewer observed ratings?",
+  "n": 112214,
+  "groups": {
+    "high_popularity": {
+      "n_movies": 200,
+      "n_ratings": 90214,
+      "mean": 2.9235
+    },
+    "low_popularity": {
+      "n_movies": 200,
+      "n_ratings": 22000,
+      "mean": 2.4506
+    }
+  },
+  "test": "Mann-Whitney U (one-tailed, greater)",
+  "statistic": 1242808144.5,
+  "p_value": 0.0,
+  "effect_size": null,
+  "multiplicity": "No correction; single pre-specified comparison",
+  "conclusion": "High-popularity movies have significantly higher ratings at alpha=0.005 (U=1242808144.5, p=0.000000e+00).",
+  "median_count_threshold": 197.5,
+  "low_n_movies": 200,
+  "high_n_movies": 200
+}

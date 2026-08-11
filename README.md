@@ -54,7 +54,7 @@ Build & dispatch
   rrg package --stage S --model M        stage, lint, publish, and log a package
                                          (--dry-run, --force, --label L)
   rrg dispatch --stage S --model M       build + run + import in one step
-                                         (--executor E, --mode M, --reuse,
+                                         (--validator V, --mode M, --reuse,
                                           --dry-run, --skip-normalize,
                                           --no-auto-import, --force)
   rrg lint PACKAGE --stage S             lint an existing outgoing package
@@ -105,14 +105,14 @@ Lifecycle
 rrg dispatch --stage replication --model "Gemini 3.1 Pro"
 
 # Automated: shells out to hermes CLI, auto-imports results
-rrg dispatch --stage replication --model "Gemini 3.1 Pro" --executor hermes
+rrg dispatch --stage replication --model "Gemini 3.1 Pro" --validator hermes
 
 # Direct API call to OpenRouter, agent-driven discussion
 rrg dispatch --stage robustness --model "GPT-5.5" \
-    --executor openrouter --mode agent
+    --validator openrouter --mode agent
 ```
 
-**Executors:** `manual` (prints instructions), `hermes` (shells out to the
+**Validators:** `manual` (prints instructions), `hermes` (shells out to the
 Hermes CLI), `openrouter` (calls the OpenRouter API directly),
 `prime-agent` (spawns a subagent; requires async IPython context).
 

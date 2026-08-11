@@ -1,0 +1,21 @@
+{
+  "question": "Do viewers who prefer watching movies socially rate The Wolf of Wall Street (2013) higher than viewers who prefer watching alone?",
+  "n": 663,
+  "groups": {
+    "social": {
+      "n": 270,
+      "mean": 3.0333
+    },
+    "alone": {
+      "n": 393,
+      "mean": 3.1438
+    }
+  },
+  "test": "Mann-Whitney U (one-tailed, greater)",
+  "statistic": 49303.5,
+  "p_value": 0.9436657996253056,
+  "effect_size": null,
+  "multiplicity": "No correction; single pre-specified comparison",
+  "conclusion": "No significant difference in Wolf of Wall Street (2013) ratings between social and alone viewers at alpha=0.005 (U=49303.5, p=9.436658e-01).",
+  "movie": "The Wolf of Wall Street (2013)"
+}

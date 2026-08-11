@@ -22,7 +22,7 @@ from .dispatch import dispatch
 from .doctor import inspect_project
 from .eval_lite import eval_run
 from .prefs import (
-    DEFAULTS, EXECUTOR_OPTIONS, MODE_OPTIONS, PREF_KEYS,
+    DEFAULTS, VALIDATOR_OPTIONS, MODE_OPTIONS, PREF_KEYS,
     load_prefs, save_prefs, reset_prefs,
 )
 from .project import Project
@@ -58,7 +58,7 @@ COMMAND_SUMMARY = [
     ("preflight", "strict readiness gate before dispatch",      "[--stage S]"),
     ("convert",   "convert + verify data derivatives",          "[--formats csv parquet]"),
     ("package",   "build, lint, and publish a validator package", "--stage S --model M [--dry-run]"),
-    ("dispatch",  "build + run + import in one step",            "--stage S --model M [--executor E] [--mode M]"),
+    ("dispatch",  "build + run + import in one step",            "--stage S --model M [--validator E] [--mode M]"),
     ("import",    "import returned validator output",           "<source> [--stage S] [--model M] [--skip-normalize]"),
     ("lint",      "lint an existing outgoing package",          "<package> --stage S"),
     ("prompt",    "render a stage prompt",                       "--stage S --model M [--turn N]"),
@@ -240,7 +240,7 @@ def _step_roster(project: Project) -> None:
         table = Table(title=f"Stage: {stage_id}", show_header=True,
                       header_style=f"bold {GOLD}", border_style=DIM, padding=(0, 1))
         table.add_column("Model", style=f"bold {GOLD}")
-        table.add_column("Executor", style=SAGE)
+        table.add_column("Validator", style=SAGE)
         table.add_column("Vendor", style=LIGHT)
         table.add_column("Type", style=SAGE)
         table.add_column("License", style=DIM)
@@ -248,7 +248,7 @@ def _step_roster(project: Project) -> None:
         for m in models:
             table.add_row(
                 m.get("model", ""),
-                m.get("executor", "—"),
+                m.get("validator", "—"),
                 m.get("vendor", ""),
                 m.get("type", ""),
                 m.get("license", ""),
@@ -260,7 +260,7 @@ def _step_dispatch(project: Project) -> None:
     prefs = load_prefs(project)
 
     console.print(f"\n  [{SAGE}]Current preferences:[/]")
-    console.print(f"    executor: [{GOLD}]{prefs.get('executor', 'manual')}[/]")
+    console.print(f"    validator: [{GOLD}]{prefs.get('validator', 'manual')}[/]")
     console.print(f"    mode: [{GOLD}]{prefs.get('mode', 'discuss')}[/]")
 
     enabled_stages = []
@@ -293,21 +293,21 @@ def _step_dispatch(project: Project) -> None:
     model_names = [m.get("model", "") for m in stage_models]
     model = Prompt.ask(f"  [{GOLD}]Which model?[/]", choices=model_names, default=model_names[0])
 
-    executor = Prompt.ask(f"  [{GOLD}]Executor?[/]",
-                          choices=list(EXECUTOR_OPTIONS),
-                          default=prefs.get("executor", "manual"))
+    validator = Prompt.ask(f"  [{GOLD}]Validator?[/]",
+                          choices=list(VALIDATOR_OPTIONS),
+                          default=prefs.get("validator", "manual"))
 
     mode = Prompt.ask(f"  [{GOLD}]Mode?[/]",
                       choices=list(MODE_OPTIONS),
                       default=prefs.get("mode", "discuss"))
 
-    console.print(f"\n  [{DIM}]Dispatching {stage} / {model} ({executor}, {mode})...[/]")
-    result = dispatch(project, stage, model, executor=executor, mode=mode)
+    console.print(f"\n  [{DIM}]Dispatching {stage} / {model} ({validator}, {mode})...[/]")
+    result = dispatch(project, stage, model, validator=validator, mode=mode)
 
     _print_dispatch_result(result)
 
     if Confirm.ask(f"\n  [{SAGE}]Save these settings as defaults?[/]", default=False):
-        save_prefs(project, {"executor": executor, "mode": mode})
+        save_prefs(project, {"validator": validator, "mode": mode})
         console.print(f"  [{SAGE}]Saved to .rrg_prefs.yaml[/]")
 
 
@@ -369,7 +369,7 @@ def run_tui_prefs(project: Project) -> None:
     console.print(Panel(f"[bold]RRG Preferences[/bold]", border_style=GOLD))
     _print_prefs_table(prefs)
 
-    console.print(f"\n  [{DIM}]executor: {', '.join(EXECUTOR_OPTIONS)}[/]")
+    console.print(f"\n  [{DIM}]validator: {', '.join(VALIDATOR_OPTIONS)}[/]")
     console.print(f"  [{DIM}]mode: {', '.join(MODE_OPTIONS)}[/]")
     console.print(f"  [{DIM}]skip_normalize: true/false  auto_import: true/false[/]")
     console.print(f"  [{DIM}]type 'reset' to restore defaults[/]")
@@ -390,7 +390,7 @@ def run_tui_prefs(project: Project) -> None:
         return
 
     options = {
-        "executor": list(EXECUTOR_OPTIONS),
+        "validator": list(VALIDATOR_OPTIONS),
         "mode": list(MODE_OPTIONS),
     }.get(key)
 

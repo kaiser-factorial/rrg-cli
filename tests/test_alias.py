@@ -1,4 +1,4 @@
-"""Tests for the alias system (executor shortcuts for rrg dispatch)."""
+"""Tests for the alias system (validator shortcuts for rrg dispatch)."""
 
 from __future__ import annotations
 
@@ -25,10 +25,10 @@ def test_list_aliases_empty(ready_project: Project) -> None:
 def test_set_and_list_alias(ready_project: Project) -> None:
     result = set_alias(ready_project, "grok-val", "grok")
     assert result["name"] == "grok-val"
-    assert result["executor"] == "grok"
+    assert result["validator"] == "grok"
     aliases = list_aliases(ready_project)
     assert "grok-val" in aliases
-    assert aliases["grok-val"]["executor"] == "grok"
+    assert aliases["grok-val"]["validator"] == "grok"
 
 
 def test_set_alias_with_model(ready_project: Project) -> None:
@@ -60,7 +60,7 @@ def test_generate_shell_function() -> None:
     func = generate_shell_function("grok-val", "grok")
     assert "grok-val()" in func
     assert "rrg dispatch" in func
-    assert "--executor" in func
+    assert "--validator" in func
     assert "grok" in func
     assert "$@" in func
 
@@ -84,4 +84,4 @@ def test_alias_overwrite(ready_project: Project) -> None:
     set_alias(ready_project, "my-val", "grok")
     set_alias(ready_project, "my-val", "claude")  # overwrite
     aliases = list_aliases(ready_project)
-    assert aliases["my-val"]["executor"] == "claude"
+    assert aliases["my-val"]["validator"] == "claude"

@@ -18,16 +18,16 @@ from .project import Project
 PREFS_FILENAME = ".rrg_prefs.yaml"
 
 DEFAULTS: dict[str, Any] = {
-    "executor": "manual",        # manual | hermes | openrouter | prime-agent
+    "validator": "manual",        # manual | hermes | openrouter | prime-agent  (which validator harness to use)
     "mode": "discuss",           # discuss | nodiscuss | agent
     "skip_normalize": False,    # skip auto-normalize on import?
     "auto_import": True,         # auto-import after dispatch completes?
 }
 
 # Known pref keys (for validation in CLI/TUI)
-PREF_KEYS: tuple[str, ...] = ("executor", "mode", "skip_normalize", "auto_import")
+PREF_KEYS: tuple[str, ...] = ("validator", "mode", "skip_normalize", "auto_import")
 
-EXECUTOR_OPTIONS: tuple[str, ...] = ("manual", "hermes", "claude", "codex", "grok", "pool", "openrouter", "prime-agent")
+VALIDATOR_OPTIONS: tuple[str, ...] = ("manual", "hermes", "claude", "codex", "grok", "pool", "openrouter", "prime-agent")
 MODE_OPTIONS: tuple[str, ...] = ("discuss", "nodiscuss", "agent")
 
 
@@ -51,6 +51,9 @@ def load_prefs(project: Project) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return dict(DEFAULTS)
     merged = dict(DEFAULTS)
+    # Backward compat: migrate old "executor" key to "validator"
+    if "executor" in raw and "validator" not in raw:
+        raw["validator"] = raw.pop("executor")
     merged.update(raw)
     return merged
 

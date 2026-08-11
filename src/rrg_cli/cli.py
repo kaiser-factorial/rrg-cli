@@ -181,8 +181,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_project_args(dispatch_cmd)
     dispatch_cmd.add_argument("--stage", required=True)
     dispatch_cmd.add_argument("--model", required=True)
-    dispatch_cmd.add_argument("--executor", choices=["manual", "hermes", "claude", "codex", "grok", "pool", "openrouter", "prime-agent"],
-                              default=None, help="executor (default: from prefs or manual)")
+    dispatch_cmd.add_argument("--validator", choices=["manual", "hermes", "claude", "codex", "grok", "pool", "openrouter", "prime-agent"],
+                              default=None, help="validator harness (default: from prefs or manual)")
     dispatch_cmd.add_argument("--mode", choices=["discuss", "nodiscuss", "agent"],
                               default=None, help="prompt mode (default: from prefs or discuss)")
     dispatch_cmd.add_argument("--label")
@@ -205,10 +205,10 @@ def build_parser() -> argparse.ArgumentParser:
     eval_cmd.add_argument("--run", required=True, help="run folder path (relative to project root)")
     eval_cmd.add_argument("--json", action="store_true")
 
-    alias_cmd = sub.add_parser("alias", help="manage dispatch executor aliases")
+    alias_cmd = sub.add_parser("alias", help="manage dispatch validator aliases")
     _add_project_args(alias_cmd)
     alias_cmd.add_argument("name", nargs="?", help="alias name (e.g. grok-val)")
-    alias_cmd.add_argument("executor", nargs="?", help="executor to alias (e.g. grok)")
+    alias_cmd.add_argument("validator", nargs="?", help="validator to alias (e.g. grok)")
     alias_cmd.add_argument("--model", default=None, help="model override for the alias")
     alias_cmd.add_argument("--list", action="store_true", help="list all aliases")
     alias_cmd.add_argument("--remove", action="store_true", help="remove an alias")
@@ -452,7 +452,7 @@ def run(args: argparse.Namespace) -> int:
         from .dispatch import dispatch
         result = dispatch(
             project, args.stage, args.model,
-            executor=args.executor, mode=args.mode, label=args.label,
+            executor=args.validator, mode=args.mode, label=args.label,
             dry_run=args.dry_run, reuse=args.reuse,
             skip_normalize=args.skip_normalize or None,
             auto_import=None if not args.no_auto_import else False,
@@ -509,15 +509,15 @@ def run(args: argparse.Namespace) -> int:
                 print("Aliases:")
                 for name, entry in sorted(aliases.items()):
                     model_str = f" [{entry.get('model')}]" if entry.get("model") else ""
-                    print(f"  {name} → {entry['executor']}{model_str}")
+                    print(f"  {name} → {entry['validator']}{model_str}")
             return 0
-        if args.name and args.executor:
-            result = set_alias(project, args.name, args.executor, args.model)
+        if args.name and args.validator:
+            result = set_alias(project, args.name, args.validator, args.model)
             if args.json:
                 _emit(result, True)
             else:
                 model_str = f" [{result['model']}]" if result.get("model") != "(default)" else ""
-                print(f"Alias: {result['name']} → {result['executor']}{model_str}")
+                print(f"Alias: {result['name']} → {result['validator']}{model_str}")
             return 0
         # No args — list
         aliases = list_aliases(project)
@@ -527,7 +527,7 @@ def run(args: argparse.Namespace) -> int:
             print("Aliases:")
             for name, entry in sorted(aliases.items()):
                 model_str = f" [{entry.get('model')}]" if entry.get("model") else ""
-                print(f"  {name} → {entry['executor']}{model_str}")
+                print(f"  {name} → {entry['validator']}{model_str}")
         return 0
     if args.command == "tui":
         from .tui import run_tui, run_tui_prefs, run_tui_eval
@@ -548,7 +548,7 @@ def _print_dispatch_result(result):
     pkg = result["package"]
     model_prov = result.get("model_provenance", "")
     model_str = f" [{model_prov}]" if model_prov else ""
-    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['executor']} executor{model_str}")
+    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['validator']} executor{model_str}")
     if pkg.get("blocked"):
         print("  \u2717 Package blocked by blinding lint")
         return
