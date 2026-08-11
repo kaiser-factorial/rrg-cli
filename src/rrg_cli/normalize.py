@@ -207,11 +207,17 @@ def check_deliverable_contract(run_path: Path, question_count: int) -> dict[str,
 
     # Find report file for DYFA check
     report_text = ""
-    for name in ("REPORT.md", "DYFA.md", "INVESTIGATION_SUMMARY.md", "SUMMARY.md"):
-        path = run_path / name
+    # Prefer *_Report.md files (the configured report name), then standard names
+    for path in sorted(run_path.glob("*_Report.md")):
         if path.is_file():
             report_text = path.read_text(encoding="utf-8", errors="ignore")
             break
+    if not report_text:
+        for name in ("REPORT.md", "DYFA.md", "INVESTIGATION_SUMMARY.md"):
+            path = run_path / name
+            if path.is_file():
+                report_text = path.read_text(encoding="utf-8", errors="ignore")
+                break
 
     for q in range(1, question_count + 1):
         analysis = (run_path / f"Q{q}_analysis.py").exists()
