@@ -115,60 +115,93 @@ blinding:
 
 ---
 
-## Step 4: Write the model-facing documents
+## Step 4: Generate the model-facing documents
 
-These files go in `shared/` — validators **will** see them. They must be
-result-neutral (no answers, no p-values, no conclusions).
-
-### `shared/STUDY_OVERVIEW.md`
-A result-neutral description of the study: sample, design, constructs, context.
-No findings, no numbers that could reveal the answer.
-
-### `shared/QUESTIONS.md`
-The validation questions, numbered 1–N. These are what the validator must answer.
-
-### `shared/VALIDATION_INSTRUCTIONS.md`
-Held-constant definitions: grouping rules, thresholds, inclusion/exclusion criteria,
-alpha level. Anything that must stay fixed across validators goes here.
-
-### `shared/ANALYSIS_PROTOCOL_OG.md`
-The original methodology, **result-free**. This is revealed only in replication
-and forbidden in robustness. It describes *how* the analysis was done, not *what*
-was found. If you don't have a separate protocol, you can generate one:
+RRG can automate most of the document creation from the dataset codebook and
+the origin report. Check what's needed:
 
 ```bash
-rrg intake  # renders the methodology-drafting prompt
+rrg setup --status
 ```
 
-Send the rendered prompt to the origin model (or an origin-author stand-in),
-paste the returned protocol back, and save it:
+### 4a. Extract questions from the origin report
 
 ```bash
+rrg setup --questions                    # render the extraction prompt
+# send it to a model (e.g. via hermes -z):
+hermes -z "$(rrg setup --questions)"     # prints the numbered question list
+# apply the result:
+rrg setup --apply-questions extracted_questions.txt
+```
+
+This also auto-generates `questions_map.yaml` and updates `study.yaml` with the
+question count. If the report uses its own numbering (e.g. Q1, Q4, Q7), the
+original numbers are preserved in the map.
+
+### 4b. Generate the study overview
+
+```bash
+rrg setup --overview                     # render the prompt (includes codebook context)
+# send to model:
+hermes -z "$(rrg setup --overview)"
+# apply:
+rrg setup --apply-overview generated_overview.md
+```
+
+The generated overview includes the dataset structure (rows, columns, value labels
+from the codebook). `<!-- HUMAN: ... -->` comments mark where you should add context
+the codebook can't provide (study motivation, theoretical framework).
+
+### 4c. Generate validation instructions
+
+```bash
+rrg setup --instructions                 # render the prompt (includes value labels)
+# send to model:
+hermes -z "$(rrg setup --instructions)"
+# apply:
+rrg setup --apply-instructions generated_instructions.md
+```
+
+The generated instructions extract group definitions from the codebook's value
+labels (e.g. "Gender: 1 (female) vs 2 (male); exclude 3 and missing"). The alpha
+level and multiplicity policy are left as `<!-- HUMAN: ... -->` placeholders.
+
+### 4d. Generate the analysis protocol
+
+The `ANALYSIS_PROTOCOL_OG.md` is a result-free reconstruction of the methods.
+Generate it from the origin report:
+
+```bash
+rrg intake                    # renders the methodology-drafting prompt
+# send to model, then apply:
 rrg intake --apply returned_protocol.md
+```
+
+### 4e. Transcribe the origin results
+
+The `operator/origin/SUMMARY.md` is the held-back answer key — per-question
+transcription of the origin report's findings.
+
+```bash
+rrg intake --check            # is intake needed?
+rrg intake --simplified       # render the simplified intake prompt
+# send to model, then apply:
+rrg intake --apply returned_intake.md
+```
+
+### 4f. Review everything
+
+All generated docs should be reviewed by a human. The model can extract questions
+wrong, miss group definitions, or get the methodology slightly off. The blinding
+lint and preflight will catch structural issues, but not content errors.
+
+```bash
+rrg preflight                 # verify everything is wired correctly
 ```
 
 ---
 
-## Step 5: Transcribe the origin results
-
-The origin `SUMMARY.md` is the held-back answer key. It transcribes the origin
-report's per-question findings so the grading pipeline can compare them to
-the validator's output.
-
-Check if intake is needed:
-
-```bash
-rrg intake --check
-```
-
-If needed, generate an intake prompt and send it to the origin model:
-
-```bash
-rrg intake --simplified  # simplified prompt (no figure_map)
-```
-
-Or write `operator/origin/SUMMARY.md` manually — one `## Q<n>` section per
-question with the origin's test, statistic, p-value, effect size, and conclusion.
+## Step 5: Configure the roster
 
 ---
 
