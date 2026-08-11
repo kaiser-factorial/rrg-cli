@@ -214,6 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup_cmd.add_argument("--apply-overview", metavar="FILE", default=None, help="apply generated study overview from a file")
     setup_cmd.add_argument("--instructions", action="store_true", help="render validation instructions generation prompt")
     setup_cmd.add_argument("--apply-instructions", metavar="FILE", default=None, help="apply generated validation instructions from a file")
+    setup_cmd.add_argument("--regenerate-map", action="store_true", help="rebuild questions_map.yaml from edited QUESTIONS.md (renumbers sequentially)")
     setup_cmd.add_argument("--json", action="store_true")
 
     alias_cmd = sub.add_parser("alias", help="manage dispatch validator aliases")
@@ -496,9 +497,18 @@ def run(args: argparse.Namespace) -> int:
             render_study_overview_prompt, apply_study_overview,
             render_validation_instructions_prompt, apply_validation_instructions,
         )
+        if args.regenerate_map:
+            from .setup import regenerate_map
+            result = regenerate_map(project)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(f"Regenerated questions_map.yaml: {result['count']} questions (renumbered 1-{result['count']})")
+            return 0
         if args.status or (not args.questions and not args.apply_questions and
                             not args.overview and not args.apply_overview and
-                            not args.instructions and not args.apply_instructions):
+                            not args.instructions and not args.apply_instructions and
+                            not args.regenerate_map):
             status = setup_status(project)
             if args.json:
                 _emit(status, True)

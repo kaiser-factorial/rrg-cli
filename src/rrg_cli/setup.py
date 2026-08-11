@@ -111,8 +111,13 @@ Generate a markdown file with the fixed definitions that validators must follow:
 2. **Fixed groups** — every grouping variable used in the questions, with the exact
    value labels and exclusion rules (e.g. "Gender: 1 (female) vs 2 (male); exclude 3
    and missing")
-3. **Decision policy** — leave `<!-- HUMAN: set alpha -->` as a placeholder for the
-   user to fill in the significance threshold
+3. **Decision policy** — include:
+   - A default significance threshold of alpha = 0.05 unless the questions or
+     origin report clearly specify a different threshold
+   - A note on multiplicity: if any question involves testing many items (e.g.
+     "what proportion of 400 movies..."), state whether raw p-values are reported
+     or whether a correction (Bonferroni, FDR, etc.) is applied. Default: report
+     raw p-values with no correction unless the report specifies otherwise.
 
 ## Rules
 
@@ -120,8 +125,8 @@ Generate a markdown file with the fixed definitions that validators must follow:
   fixed definitions validators must use
 - If a question references a specific variable (e.g. "column 476"), include the
   mapping from the codebook
-- Leave placeholders (`<!-- HUMAN: ... -->`) for anything that requires a human
-  scientific decision (alpha, multiplicity correction policy)
+- Alpha defaults to 0.05 — do not leave it as a placeholder. If a different
+  alpha is clearly stated in the questions or report, use that instead.
 
 ## Output
 
@@ -410,6 +415,75 @@ def _inside(root: Path, path: Path) -> bool:
 # ---------------------------------------------------------------------------
 # Setup orchestration
 # ---------------------------------------------------------------------------
+
+def regenerate_map(project: Project) -> dict[str, Any]:
+    """Rebuild questions_map.yaml from the current QUESTIONS.md.
+
+    Use this after the user edits QUESTIONS.md to remove questions they don't
+    want to validate. Re-parses the numbered list and regenerates the map.
+    """
+    questions_path = project.path("shared/QUESTIONS.md")
+    if not questions_path.is_file():
+        raise RRGError("QUESTIONS.md not found — run `rrg setup --questions` first")
+
+    text = questions_path.read_text(encoding="utf-8")
+    questions: list[dict[str, str]] = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        m = re.match(r"^(\d+)[.)]\s+(.+)$", line)
+        if m:
+            num = int(m.group(1))
+            q_text = m.group(2).strip()
+            # Try to extract topic from the question text
+            topic = q_text[:50].rstrip()
+            # Check for original number annotation
+            orig_match = re.search(r"\(Q?(\d+)\)", q_text)
+            original = int(orig_match.group(1)) if orig_match else num
+            questions.append({
+                "new": num,
+                "original": original,
+                "topic": topic,
+                "text": q_text,
+            })
+
+    if not questions:
+        raise RRGError("no questions found in QUESTIONS.md (expected a numbered list)")
+
+    # Renumber sequentially (in case the user deleted some)
+    renumbered = []
+    for new_num, q in enumerate(questions, 1):
+        renumbered.append({
+            "new": new_num,
+            "original": q["original"],
+            "topic": q["topic"],
+        })
+
+    # Write questions_map.yaml
+    map_path = project.path(project.study.get("questions", {}).get("map", "questions_map.yaml"))
+    map_path.parent.mkdir(parents=True, exist_ok=True)
+    map_path.write_text(dump_yaml({"questions": renumbered}), encoding="utf-8")
+
+    # Update study.yaml count
+    study_path = project.study_path
+    existing = load_yaml(study_path)
+    if "study" in existing:
+        existing["study"].setdefault("questions", {})["count"] = len(renumbered)
+        study_path.write_text(dump_yaml(existing), encoding="utf-8")
+
+    # Also rewrite QUESTIONS.md with sequential numbering
+    lines = ["# Validation questions", ""]
+    for new_num, q in enumerate(questions, 1):
+        lines.append(f"{new_num}. {q['text']}")
+    questions_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    return {
+        "count": len(renumbered),
+        "map_written": str(map_path.relative_to(project.root)) if _inside(project.root, map_path) else str(map_path),
+        "questions_renumbered": len(questions),
+    }
+
 
 def setup_status(project: Project) -> dict[str, Any]:
     """Check which setup steps are needed for a project."""

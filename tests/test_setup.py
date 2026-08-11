@@ -144,3 +144,37 @@ def test_apply_questions_no_questions_raises(ready_project: Project) -> None:
     """Text without numbered questions raises an error."""
     with pytest.raises(Exception):
         apply_questions(ready_project, "This is just some text without numbered questions.")
+
+
+
+def test_regenerate_map_after_editing(ready_project: Project) -> None:
+    """Regenerating the map after editing QUESTIONS.md renumbers sequentially."""
+    from rrg_cli.setup import regenerate_map
+
+    # Write a QUESTIONS.md with 5 questions
+    questions_path = ready_project.root / "shared" / "QUESTIONS.md"
+    questions_path.write_text(
+        "# Validation questions\n\n"
+        "1. First question?\n"
+        "2. Second question?\n"
+        "3. Third question?\n"
+        "4. Fourth question?\n"
+        "5. Fifth question?\n"
+    )
+    # Now "delete" questions 2 and 4 by rewriting
+    questions_path.write_text(
+        "# Validation questions\n\n"
+        "1. First question?\n"
+        "3. Third question?\n"
+        "5. Fifth question?\n"
+    )
+    result = regenerate_map(ready_project)
+    assert result["count"] == 3
+    # Questions should be renumbered 1-3
+    content = questions_path.read_text()
+    assert "1. First question?" in content
+    assert "2. Third question?" in content
+    assert "3. Fifth question?" in content
+    # Old numbers 3 and 5 should not appear as line starts
+    assert "3. Third" not in content
+    assert "5. Fifth" not in content
