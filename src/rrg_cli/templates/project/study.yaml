@@ -26,6 +26,7 @@ study:
     file: shared/QUESTIONS.md
     count: 3
     map: questions_map.yaml
+    metric_spec: shared/METRIC_SPEC.json
   held_constants:
     file: shared/VALIDATION_INSTRUCTIONS.md
     summary: the study's construct and grouping definitions
@@ -36,6 +37,7 @@ study:
     model: OriginModel
     vendor: OriginVendor
     summary_file: operator/origin/SUMMARY.md
+    results_file: operator/origin/origin.json
     methodology_prompt: operator/OG_METHODOLOGY_PROMPT.md
   deliverable:
     report_name: "{MODEL}_Report.md"

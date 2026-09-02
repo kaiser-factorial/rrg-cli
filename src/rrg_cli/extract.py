@@ -11,10 +11,17 @@ from __future__ import annotations
 import json
 import math
 import re
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
 from .errors import RRGError
+from .metrics import (
+    load_origin_results,
+    load_public_metric_specs,
+    question_metric_specs,
+    question_origin_metrics,
+)
 from .project import Project
 from .scorecard import _markdown_section
 
@@ -29,6 +36,9 @@ STATUS_EXACT = "exact"
 STATUS_WITHIN_TOLERANCE = "within_tolerance"
 STATUS_DIFFERENT = "different"
 STATUS_VALIDATOR_ONLY = "validator_only"
+STATUS_VALIDATOR_MISSING = "validator_missing"
+STATUS_ORIGIN_MISSING = "origin_missing"
+STATUS_UNIT_MISMATCH = "unit_mismatch"
 
 _ORIGIN_FIELD_RE = re.compile(
     r"^\s*-\s*\*\*(?P<key>[A-Za-z0-9_ -]+)\*\*\s*[—–-]\s*(?P<value>.*)$"
@@ -53,6 +63,138 @@ def flatten(value: Any, prefix: str = "") -> list[tuple[str, Any]]:
 
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
+
+
+def _decimal(value: Any) -> Decimal:
+    try:
+        result = Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"not a decimal number: {value!r}") from exc
+    if not result.is_finite():
+        raise ValueError(f"not a finite number: {value!r}")
+    return result
+
+
+def _json_path(payload: dict[str, Any], path: str) -> tuple[bool, Any]:
+    node: Any = payload
+    for part in path.split("."):
+        try:
+            node = node[int(part)] if isinstance(node, list) else node[part]
+        except (KeyError, IndexError, TypeError, ValueError):
+            return False, None
+    return True, node
+
+
+def _unit_definition(unit: str) -> tuple[str, Decimal]:
+    normalized = unit.strip().lower().replace(" ", "_")
+    definitions = {
+        "1": ("scalar", Decimal("1")),
+        "scalar": ("scalar", Decimal("1")),
+        "count": ("count", Decimal("1")),
+        "probability": ("probability", Decimal("1")),
+        "proportion": ("proportion", Decimal("1")),
+        "percent": ("proportion", Decimal("0.01")),
+        "percentage_points": ("proportion", Decimal("0.01")),
+        "usd": ("currency", Decimal("1")),
+        "usd_million": ("currency", Decimal("1000000")),
+        "million_usd": ("currency", Decimal("1000000")),
+        "usd_billion": ("currency", Decimal("1000000000")),
+        "billion_usd": ("currency", Decimal("1000000000")),
+    }
+    return definitions.get(normalized, (normalized, Decimal("1")))
+
+
+def _format_contract_delta(delta: Decimal, unit: str) -> str:
+    dimension, multiplier = _unit_definition(unit)
+    shown = delta / multiplier
+    number = float(shown)
+    normalized = unit.strip().lower().replace(" ", "_")
+    if dimension == "currency" and multiplier == 1:
+        sign = "-" if number < 0 else ""
+        magnitude = abs(number)
+        rendered = f"{magnitude:,.0f}" if magnitude == int(magnitude) else f"{magnitude:,.6g}"
+        return f"{sign}${rendered}"
+    if normalized in {"usd_billion", "billion_usd"}:
+        return f"{number:,.6g} billion USD"
+    if normalized in {"usd_million", "million_usd"}:
+        return f"{number:,.6g} million USD"
+    if normalized in {"percent", "percentage_points"}:
+        return f"{number:,.6g} percentage points"
+    return f"{number:,.6g}"
+
+
+def compare_canonical_metric(
+    spec: dict[str, Any], payload: dict[str, Any], origin_record: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Compare one specified validator JSON path to one held-back canonical value."""
+    metric_id = str(spec["id"])
+    validator_path = str(spec["validator_path"])
+    kind = str(spec["kind"])
+    unit = str(spec["unit"])
+    found, value = _json_path(payload, validator_path)
+    tolerance = P_VALUE_ABS_TOLERANCE if kind == "p_value" else 0.0
+    base = {
+        "metric_id": metric_id,
+        "label": validator_path,
+        "value": _format_value(value) if found and value is not None else "",
+        "origin_value": "",
+        "in_origin": False,
+        "exact": False,
+        "within_tolerance": False,
+        "status": STATUS_VALIDATOR_MISSING,
+        "delta": None,
+        "delta_display": "",
+        "tolerance": tolerance,
+        "policy": "p_value_abs" if kind == "p_value" else "exact",
+        "kind": kind,
+        "unit": unit,
+        "origin_context": "",
+        "source": "canonical_origin",
+    }
+    if not found or not _is_number(value):
+        return base
+    if not isinstance(origin_record, dict) or not _is_number(origin_record.get("value")):
+        return {**base, "status": STATUS_ORIGIN_MISSING}
+
+    origin_unit = str(origin_record.get("unit") or unit)
+    dimension, multiplier = _unit_definition(unit)
+    origin_dimension, origin_multiplier = _unit_definition(origin_unit)
+    origin_display = str(origin_record.get("display") or _format_value(origin_record["value"]))
+    context = f"canonical origin metric {metric_id}"
+    if dimension != origin_dimension:
+        return {
+            **base,
+            "origin_value": origin_display,
+            "status": STATUS_UNIT_MISMATCH,
+            "origin_context": context,
+        }
+
+    validator_canonical = _decimal(value) * multiplier
+    origin_canonical = _decimal(origin_record["value"]) * origin_multiplier
+    delta = validator_canonical - origin_canonical
+    if delta == 0:
+        return {
+            **base,
+            "origin_value": origin_display,
+            "in_origin": True,
+            "exact": True,
+            "status": STATUS_EXACT,
+            "delta": 0.0,
+            "delta_display": "0",
+            "origin_context": context,
+        }
+    tolerance_canonical = _decimal(tolerance) * multiplier
+    within = tolerance > 0 and abs(delta) <= tolerance_canonical
+    return {
+        **base,
+        "origin_value": origin_display,
+        "in_origin": within,
+        "within_tolerance": within,
+        "status": STATUS_WITHIN_TOLERANCE if within else STATUS_DIFFERENT,
+        "delta": float(delta),
+        "delta_display": _format_contract_delta(delta, unit),
+        "origin_context": context,
+    }
 
 
 def _is_p_label(label: str) -> bool:
@@ -256,6 +398,60 @@ def _unit_hint(payload: dict[str, Any], label: str) -> str:
     return ""
 
 
+def _canonical_stats(
+    project: Project,
+    payload: dict[str, Any],
+    question_new: int,
+    question_original: int,
+) -> list[dict[str, Any]] | None:
+    """Return contract-driven rows, or ``None`` for a legacy text-only project."""
+    public = load_public_metric_specs(project, required=False)
+    origin = load_origin_results(project, required=False)
+    specs = question_metric_specs(public, question_new) if public else []
+    origin_metrics = question_origin_metrics(origin, question_original) if origin else {}
+    if not specs or not origin_metrics or not any(
+        isinstance(record, dict) and _is_number(record.get("value"))
+        for record in origin_metrics.values()
+    ):
+        return None
+
+    rows = [
+        compare_canonical_metric(spec, payload, origin_metrics.get(str(spec["id"])))
+        for spec in specs
+    ]
+    specified_paths = {str(spec["validator_path"]) for spec in specs}
+    for label, value in flatten(payload):
+        leaf = label.lower().split(".")[-1]
+        if (
+            label in specified_paths
+            or not _is_number(value)
+            or label.lower() == "question"
+            or leaf in {"rank", "score", "year"}
+        ):
+            continue
+        rows.append(
+            {
+                "metric_id": "",
+                "label": label,
+                "value": _format_value(value),
+                "origin_value": "",
+                "in_origin": False,
+                "exact": False,
+                "within_tolerance": False,
+                "status": STATUS_VALIDATOR_ONLY,
+                "delta": None,
+                "delta_display": "",
+                "tolerance": 0.0,
+                "policy": "uncontracted",
+                "kind": "",
+                "unit": "",
+                "origin_context": "",
+                "source": "canonical_origin",
+            }
+        )
+    return rows
+
+
 def _number_forms(number: float) -> list[str]:
     # Build an ordered list, not a set: ``sorted`` is stable, so equal-length forms keep
     # this insertion order (plain decimal, then comma-grouped, then percent). With a set
@@ -418,24 +614,35 @@ def question_extraction(
     payload, json_name = _validator_json(run_dir, question_new)
     origin_text = _origin_question_text(key_dir, question_original, summary_name)
 
-    stats = []
-    values = []
+    values = [
+        value
+        for label, value in flatten(payload or {})
+        if _is_number(value) and label.lower() != "question"
+    ]
+    stats = _canonical_stats(project, payload or {}, question_new, question_original)
+    comparison_source = "canonical_origin" if stats is not None else "legacy_origin_text"
+    stats = stats or []
     origin_known_values: list[Any] = []
-    for label, value in flatten(payload or {}):
-        # Comparison rows are numerical results. Narrative metadata remains available in
-        # the side-by-side report and should not become dozens of false "not found" stats.
-        leaf = label.lower().split(".")[-1]
-        if not _is_number(value) or label.lower() == "question" or leaf in {"rank", "score", "year"}:
-            continue
-        values.append(value)
-        hint = _unit_hint(payload or {}, label)
-        stats.append(compare_value(label, value, origin_text, unit_hint=hint))
-        number = float(value)
-        kind, multiplier = _value_kind(label, hint)
-        origin_known_values.append(number)
-        if kind == "usd":
-            canonical = number * multiplier
-            origin_known_values.extend((canonical, canonical / 1_000_000, canonical / 1_000_000_000))
+    if comparison_source == "legacy_origin_text":
+        for label, value in flatten(payload or {}):
+            # Comparison rows are numerical results. Narrative metadata remains available in
+            # the side-by-side report and should not become dozens of false "not found" stats.
+            leaf = label.lower().split(".")[-1]
+            if not _is_number(value) or label.lower() == "question" or leaf in {"rank", "score", "year"}:
+                continue
+            hint = _unit_hint(payload or {}, label)
+            stats.append(compare_value(label, value, origin_text, unit_hint=hint))
+            number = float(value)
+            kind, multiplier = _value_kind(label, hint)
+            origin_known_values.append(number)
+            if kind == "usd":
+                canonical = number * multiplier
+                origin_known_values.extend((canonical, canonical / 1_000_000, canonical / 1_000_000_000))
+    else:
+        canonical_origin = load_origin_results(project, required=False)
+        for record in question_origin_metrics(canonical_origin, question_original).values():
+            if isinstance(record, dict) and _is_number(record.get("value")):
+                origin_known_values.append(record["value"])
 
     expect_exact = False
     if stage:
@@ -450,7 +657,7 @@ def question_extraction(
     )
     if not origin_numeric_text.strip():
         origin_numeric_text = origin_text
-    extra = origin_only(origin_numeric_text, origin_known_values)
+    extra = origin_only(origin_numeric_text, origin_known_values) if comparison_source == "legacy_origin_text" else []
     paired_origin = [str(row.get("origin_value", "")) for row in stats if row.get("origin_value")]
     extra = [
         item for item in extra
@@ -473,9 +680,18 @@ def question_extraction(
 
     return {
         "stats": stats,
+        "comparison_source": comparison_source,
         "comparison_counts": {
             status: sum(1 for row in stats if row["status"] == status)
-            for status in (STATUS_EXACT, STATUS_WITHIN_TOLERANCE, STATUS_DIFFERENT, STATUS_VALIDATOR_ONLY)
+            for status in (
+                STATUS_EXACT,
+                STATUS_WITHIN_TOLERANCE,
+                STATUS_DIFFERENT,
+                STATUS_VALIDATOR_ONLY,
+                STATUS_VALIDATOR_MISSING,
+                STATUS_ORIGIN_MISSING,
+                STATUS_UNIT_MISMATCH,
+            )
         },
         "tolerance_policy": {
             "default": 0.0,

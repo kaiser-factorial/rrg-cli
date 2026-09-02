@@ -11,6 +11,7 @@ from typing import Any
 from .blinding import lint_package
 from .errors import RRGError
 from .importer import RUN_MARKER_NAME, render_run_marker
+from .metrics import load_public_metric_specs, public_metric_spec_path
 from .project import Project
 from .prompts import render_prompt
 from .routing import RoutedInput, resolve_send
@@ -74,6 +75,10 @@ def build_package(
     # already disambiguates it.
     run_id = mint_run_id()
     run_slug = f"{run_label}__{run_id}"
+    if public_metric_spec_path(project).is_file():
+        # Validate before copying or dispatching. Public specs are executable contracts;
+        # answer values, tolerances, or method hints never belong in them.
+        load_public_metric_specs(project)
     inputs = resolve_send(project, stage_id)
     package_root = project.path_setting("packages", "operator/_packages")
     destination = _unique_destination(package_root / stage_id / run_slug)

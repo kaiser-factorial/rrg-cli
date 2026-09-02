@@ -1,0 +1,29 @@
+{
+  "schema_version": "rrg.origin-results.v1",
+  "questions": {
+    "1": {
+      "metrics": {
+        "n": {"value": null, "unit": "count", "display": ""},
+        "statistic": {"value": null, "unit": "1", "display": ""},
+        "p_value": {"value": null, "unit": "probability", "display": ""},
+        "effect_size": {"value": null, "unit": "1", "display": ""}
+      }
+    },
+    "2": {
+      "metrics": {
+        "n": {"value": null, "unit": "count", "display": ""},
+        "statistic": {"value": null, "unit": "1", "display": ""},
+        "p_value": {"value": null, "unit": "probability", "display": ""},
+        "effect_size": {"value": null, "unit": "1", "display": ""}
+      }
+    },
+    "3": {
+      "metrics": {
+        "n": {"value": null, "unit": "count", "display": ""},
+        "statistic": {"value": null, "unit": "1", "display": ""},
+        "p_value": {"value": null, "unit": "probability", "display": ""},
+        "effect_size": {"value": null, "unit": "1", "display": ""}
+      }
+    }
+  }
+}

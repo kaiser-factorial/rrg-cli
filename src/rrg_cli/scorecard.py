@@ -137,8 +137,8 @@ def build_scorecard(
         "Exact comparison is the default. Only structurally recognized p-value fields use the pipeline-owned "
         "absolute band of `0.005`; values inside that band remain flagged as **WITHIN_TOLERANCE**, never exact.",
         "",
-        "| Q | Topic | Verdict | Exact | Within tolerance | Different | Validator-only | Origin-only | Note |",
-        "|---:|---|---|---:|---:|---:|---:|---:|---|",
+        "| Q | Topic | Verdict | Exact | Within tolerance | Different | Contract issues | Validator-only | Origin-only | Note |",
+        "|---:|---|---|---:|---:|---:|---:|---:|---:|---|",
     ]
     tally: dict[str, int] = {}
     details: list[str] = []
@@ -152,6 +152,9 @@ def build_scorecard(
             project, run_value, row["new"], row["original"], stage=stage
         )
         counts = extraction.get("comparison_counts", {})
+        contract_issues = sum(
+            counts.get(name, 0) for name in ("validator_missing", "origin_missing", "unit_mismatch")
+        )
         entry = (verdicts or {}).get(row["new"]) or (verdicts or {}).get(str(row["new"])) or {}
         verdict = str(entry.get("verdict") or "PENDING")
         note = _cell(str(entry.get("note") or "")) or f"orig Q{row['original']}"
@@ -160,12 +163,15 @@ def build_scorecard(
         lines.append(
             f"| {row['new']} | {_cell(row['topic'])} | {verdict_cell} | "
             f"{counts.get('exact', 0)} | {counts.get('within_tolerance', 0)} | "
-            f"{counts.get('different', 0)} | {counts.get('validator_only', 0)} | "
+            f"{counts.get('different', 0)} | {contract_issues} | "
+            f"{counts.get('validator_only', 0)} | "
             f"{len(extraction.get('origin_only', []))} | {note} |"
         )
         details.extend([
             "",
             f"### Q{row['new']} — {row['topic']}",
+            "",
+            f"Comparison source: `{extraction.get('comparison_source', 'legacy_origin_text')}`",
             "",
             "| Validator field | Validator value | Origin value | Delta | Tolerance | Status |",
             "|---|---:|---:|---:|---:|---|",

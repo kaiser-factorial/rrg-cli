@@ -20,6 +20,7 @@ files:
     - shared/STUDY_OVERVIEW.md
     - shared/QUESTIONS.md
     - shared/VALIDATION_INSTRUCTIONS.md
+    - shared/METRIC_SPEC.json
     - data/analysis.csv
     - data/analysis.parquet
     - data/analysis.meta.json
@@ -94,7 +95,7 @@ blinding:
   result_token_scan:
     source: operator/origin
     action: flag
-    exclude_globs: ["*.csv", "*.parquet", "*.json"]
+    exclude_globs: ["*.csv", "*.parquet", "METRIC_SPEC.json"]
     ignore_tokens: []
 
 constraints:

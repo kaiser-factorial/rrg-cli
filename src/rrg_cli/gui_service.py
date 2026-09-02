@@ -455,10 +455,11 @@ class GUIState:
                 return 4
             return 99
 
-        ranked = sorted(((rank(stat["label"]), index, stat) for index, stat in enumerate(stats)))
+        reported = [stat for stat in stats if stat.get("value") not in {None, ""}]
+        ranked = sorted(((rank(stat["label"]), index, stat) for index, stat in enumerate(reported)))
         if ranked and ranked[0][0] < 99:
             return ranked[0][2]
-        return stats[0] if stats else None
+        return reported[0] if reported else None
 
     def cross_run_overview(self) -> dict[str, Any]:
         """A question x run snapshot: each cell shows a run's headline statistic for

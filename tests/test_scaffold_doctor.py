@@ -15,6 +15,8 @@ def test_scaffold_has_complete_project_contract(project_root: Path):
         "shared/STUDY_OVERVIEW.md",
         "shared/QUESTIONS.md",
         "shared/VALIDATION_INSTRUCTIONS.md",
+        "shared/METRIC_SPEC.json",
+        "operator/origin/origin.json",
         "shared/ANALYSIS_PROTOCOL_OG.md",
         "prompts/replication.md",
         "prompts/robustness.md",

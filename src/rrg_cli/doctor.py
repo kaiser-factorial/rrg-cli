@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .project import Project
+from .metrics import load_origin_results, load_public_metric_specs
 from .prompts import render_prompt
 from .routing import resolve_send
 from .utils import sha256
@@ -36,9 +37,11 @@ def _study_paths(project: Project) -> list[tuple[str, str, bool]]:
         ("dataset metadata", dataset.get("metadata"), False),
         ("questions", questions.get("file"), True),
         ("questions map", questions.get("map"), True),
+        ("metric specifications", questions.get("metric_spec"), True),
         ("held constants", held.get("file"), True),
         ("original methodology", original.get("methodology_file"), True),
         ("results key", original.get("results_key"), True),
+        ("canonical origin results", original.get("results_file"), True),
     ]
     if aux.get("enabled"):
         paths.append(("auxiliary dataset", aux.get("file"), True))
@@ -77,6 +80,16 @@ def inspect_project(project: Project, stage: str | None = None, strict: bool = F
         exists = path.exists()
         severity = "ok" if exists else ("error" if strict or name not in generated_names else "warning")
         checks.append(Check(severity, name, "found" if exists else "missing", str(path)))
+
+    for name, loader in (
+        ("metric specification schema", load_public_metric_specs),
+        ("canonical origin schema", load_origin_results),
+    ):
+        try:
+            loader(project)
+            checks.append(Check("ok", name, "valid"))
+        except Exception as exc:
+            checks.append(Check("error" if strict else "warning", name, str(exc)))
 
     metadata_value = (project.study.get("dataset", {}) or {}).get("metadata")
     source_value = (project.study.get("dataset", {}) or {}).get("source")

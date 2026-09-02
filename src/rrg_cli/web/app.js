@@ -343,10 +343,20 @@ async function loadReviewQuestion(question){
   const figures=items=>(items||[]).map(item=>`<figure id="fig-${figStem(item.name)}"><img src="${item.data_url}" alt="${esc(item.name)}"><figcaption class="mut">${esc(item.name)}</figcaption></figure>`).join('')||'<div class="empty">No figures.</div>';
   const legend=(result.legend||[]).map(verdict=>`<option value="${esc(verdict)}"${result.verdict===verdict?' selected':''}>${esc(verdict)}</option>`).join('');
   const stageNote=result.expect_exact?banner('warn','Replication stage — the validator should reproduce the origin’s statistics, so treat any “— not reported” as a discrepancy to check.'):banner('ok','Robustness stage — the validator chose its own method, so different or missing statistics can be legitimate. Lean on the narratives.');
-  const statusPill=stat=>stat.status==='exact'?'<span class="pill ok">exact</span>':(stat.status==='within_tolerance'?'<span class="pill warn">within tolerance · flagged</span>':(stat.status==='different'?'<span class="pill bad">different</span>':'<span class="pill">validator-only</span>'));
+  const statusPill=stat=>{
+    const statuses={
+      exact:['ok','exact'],within_tolerance:['warn','within tolerance · flagged'],
+      different:['bad','different'],validator_missing:['bad','validator missing'],
+      origin_missing:['bad','origin missing'],unit_mismatch:['bad','unit mismatch'],
+      validator_only:['','validator-only'],
+    };
+    const [cls,label]=statuses[stat.status]||['',stat.status||'unknown'];
+    return`<span class="pill ${cls}">${esc(label)}</span>`;
+  };
   const originCell=stat=>stat.origin_value?`<code class="${originClass}">${esc(stat.origin_value)}</code>${stat.origin_context?`<div class="mut ctx">${esc(stat.origin_context)}</div>`:''}`:'<span class="mut">— not paired</span>';
   const statRows=(result.stats||[]).map(stat=>`<tr><td>${esc(stat.label)}</td><td><code class="${valClass}">${esc(stat.value)}</code></td><td>${originCell(stat)}</td><td><code>${esc(stat.delta_display||'—')}</code></td><td><code>${esc(stat.tolerance)}</code></td><td>${statusPill(stat)}</td></tr>`).join('');
-  const statsCaption='<p class="mut">Fields are compared under pipeline-owned policy: exact by default; recognized p-values use an absolute 0.005 band. Within-tolerance values remain flagged and never count as exact. Validator output cannot set or widen tolerance.</p>';
+  const source=result.comparison_source==='canonical_origin'?'canonical metric IDs and held-back origin JSON':'legacy origin-text parsing';
+  const statsCaption=`<p class="mut">Comparison source: ${source}. Fields use pipeline-owned policy: exact by default; recognized p-values use an absolute 0.005 band. Within-tolerance values remain flagged and never count as exact. Validator output cannot set or widen tolerance.</p>`;
   const statsBody=result.has_validator_stats?`${statsCaption}<table><thead><tr><th>Statistic</th><th class="${valClass}">Validator value</th><th class="${originClass}">Origin value</th><th>Delta</th><th>Tolerance</th><th>Status</th></tr></thead><tbody>${statRows}</tbody></table>`:`<div class="empty">No machine-readable Q${result.question.new}_summary.json from this validator — compare via the narratives below.</div>`;
   const onlyRows=(result.origin_only||[]).map(item=>`<tr><td><code class="${originClass}">${esc(item.value)}</code></td><td class="mut">${esc(item.context)}</td></tr>`).join('');
   const onlyBody=onlyRows?`<p class="mut">Numbers in the origin’s material for this question that don’t match any value the validator reported — the origin may have measured more.</p><table><thead><tr><th>Origin value</th><th>Context</th></tr></thead><tbody>${onlyRows}</tbody></table>`:'<div class="empty">None — every origin figure for this question matched a validator value.</div>';

@@ -87,6 +87,17 @@ def _extract_result_tokens(root: Path) -> set[str]:
     return {token for token in tokens if token not in {".00", "0.00", "1.00"}}
 
 
+def _routed_project_files(project: Project, source: Path) -> list[str]:
+    paths = [source] if source.is_file() else [path for path in source.rglob("*") if path.is_file()]
+    relative: list[str] = []
+    for path in paths:
+        try:
+            relative.append(str(path.resolve().relative_to(project.root.resolve())))
+        except ValueError:
+            relative.append(str(path.resolve()))
+    return relative
+
+
 def lint_package(package: Path, stage: str, project: Project) -> LintReport:
     package = package.resolve()
     report = LintReport(str(package), stage)
@@ -122,10 +133,30 @@ def lint_package(package: Path, stage: str, project: Project) -> LintReport:
         report.add("stage_methodology_forbid", "hard_fail", "Stage-forbidden methodology is present.", forbidden)
 
     try:
-        expected = expected_package_files(resolve_send(project, stage))
+        routed = resolve_send(project, stage)
+        expected = expected_package_files(routed)
     except Exception as exc:
         report.add("routing", "hard_fail", f"Could not resolve stage routing: {exc}")
+        routed = []
         expected = set()
+
+    source_violations = sorted(
+        {
+            relative
+            for item in routed
+            for relative in _routed_project_files(project, item.source)
+            for pattern in denied
+            if _pattern_match(relative, str(pattern))
+        }
+    )
+    if source_violations:
+        report.add(
+            "withheld_source_routing",
+            "hard_fail",
+            "Configured routing selects withheld source files before package-name flattening.",
+            source_violations,
+        )
+
     extras = sorted(set(relatives) - expected - {"_provenance.json"})
     absent = sorted(expected - set(relatives))
     if extras or absent:
