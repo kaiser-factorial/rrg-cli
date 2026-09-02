@@ -351,14 +351,91 @@ OPTIONAL_MODEL_VALIDATORS = {"hermes", "codex", "grok", "claude", "pool"}
 
 
 
+def _send_turn(
+    validator: str, text: str, slug: str, work_dir: str, session_id: str | None,
+) -> tuple[str, str | None, str | None]:
+    """Send one turn to a CLI validator, looked up by name so tests can patch it."""
+    import sys
+    exec_fn = getattr(sys.modules[__name__], f"_exec_{validator}_turn", None)
+    if exec_fn is None:
+        raise RRGError(f"validator not implemented: {validator}")
+    if validator in SLUG_VALIDATORS:
+        return exec_fn(text, slug, work_dir, session_id)
+    return exec_fn(text, work_dir, session_id)
+
+
+def _gate_loop(
+    validator: str,
+    slug: str,
+    work_dir: str,
+    session_id: str | None,
+    gate_spec: dict[str, Any],
+    conversation: list[dict[str, Any]],
+    detected_model: str | None,
+) -> dict[str, Any]:
+    """Deterministic deliverable gates with an observation → revision loop.
+
+    After the validator's final turn, check the work dir against the deliverable contract.
+    Each hard failure becomes a revision turn (same session) listing every violation with
+    the expected fix, up to ``max_revisions`` times. The validator never sees anything but
+    filenames, key names, and codes.
+    """
+    from .gates import check_gates
+
+    max_revisions = int(gate_spec.get("max_revisions", 1) or 0)
+    kwargs = {
+        "question_count": int(gate_spec.get("question_count", 0) or 0),
+        "report_name": str(gate_spec.get("report_name", "") or ""),
+        "output_folder": gate_spec.get("output_folder"),
+    }
+    result = check_gates(work_dir, **kwargs)
+    history = [result.as_observation()]
+    revisions = 0
+    stopped: str | None = None
+    # Any violation — hard or advisory — earns a revision turn while revisions remain.
+    # Only hard violations decide pass/fail. If a revision left the advisory set exactly
+    # as it was, the model has declined (or it does not apply); don't repeat the same ask.
+    while not result.clean and revisions < max_revisions:
+        if revisions and result.passed and history[-1]["soft"] == history[-2]["soft"]:
+            stopped = "advisory items unchanged after revision; not re-sending"
+            break
+        revisions += 1
+        feedback = result.feedback(revisions, max_revisions)
+        response, session_id, model = _send_turn(validator, feedback, slug, work_dir, session_id)
+        conversation.append({
+            "turn": len(conversation) + 1,
+            "title": f"Gate revision {revisions}",
+            "prompt": feedback,
+            "response": response,
+            "session_id": session_id,
+            "model": model or detected_model,
+            "gate": history[-1],
+        })
+        result = check_gates(work_dir, **kwargs)
+        history.append(result.as_observation())
+    return {
+        "enabled": True,
+        "passed": result.passed,
+        "clean": result.clean,
+        "revisions": revisions,
+        "max_revisions": max_revisions,
+        "stopped": stopped,
+        "root": result.root,
+        "summary": result.summary_line(),
+        "history": history,
+        "final": history[-1],
+    }
+
+
 def _run_validator(
     validator: str,
     rendered: Any,
     slug: str,
     work_dir: str,
     mode: str,
-) -> list[dict[str, Any]]:
-    """Run the multi-turn validator loop. Returns conversation history."""
+    gate_spec: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run the multi-turn validator loop. Returns (conversation history, gate result)."""
     conversation: list[dict[str, Any]] = []
     session_id: str | None = None
     messages: list[dict[str, str]] = []  # for openrouter conversation accumulation
@@ -371,16 +448,7 @@ def _run_validator(
             messages.append({"role": "assistant", "content": response})
             detected_model = slug
         else:
-            # Look up the validator function by name so mocks can patch it
-            import sys
-            exec_fn = getattr(sys.modules[__name__], f"_exec_{validator}_turn", None)
-            if exec_fn is None:
-                raise RRGError(f"validator not implemented: {validator}")
-
-            if validator in SLUG_VALIDATORS:
-                response, session_id, model = exec_fn(turn.text, slug, work_dir, session_id)
-            else:
-                response, session_id, model = exec_fn(turn.text, work_dir, session_id)
+            response, session_id, model = _send_turn(validator, turn.text, slug, work_dir, session_id)
             if model and not detected_model:
                 detected_model = model
 
@@ -401,12 +469,7 @@ def _run_validator(
                 op_reply = _call_openrouter(op_response, slug, messages)
                 messages.append({"role": "assistant", "content": op_reply})
             else:
-                import sys as _sys
-                _exec_fn = getattr(_sys.modules[__name__], f"_exec_{validator}_turn", None)
-                if validator in SLUG_VALIDATORS:
-                    op_reply, session_id, _ = _exec_fn(op_response, slug, work_dir, session_id)
-                else:
-                    op_reply, session_id, _ = _exec_fn(op_response, work_dir, session_id)
+                op_reply, session_id, _ = _send_turn(validator, op_response, slug, work_dir, session_id)
             conversation.append({
                 "turn": i,
                 "title": "Operator response (agent)",
@@ -421,7 +484,15 @@ def _run_validator(
         final = conversation[-1]["response"]
         (Path(work_dir) / "SUMMARY.md").write_text(final, encoding="utf-8")
 
-    return conversation
+    # Deliverable gates: only meaningful for validators that write files.
+    if not gate_spec:
+        gates: dict[str, Any] = {"enabled": False, "reason": "gates disabled"}
+    elif validator == "openrouter":
+        gates = {"enabled": False, "reason": "openrouter has no filesystem; nothing to gate"}
+    else:
+        gates = _gate_loop(validator, slug, work_dir, session_id, gate_spec, conversation, detected_model)
+
+    return conversation, gates
 
 
 # ---------------------------------------------------------------------------
@@ -566,12 +637,16 @@ def dispatch(
     skip_normalize: bool | None = None,
     auto_import: bool | None = None,
     force: bool = False,
+    gates: bool | None = None,
+    gate_revisions: int | None = None,
 ) -> dict[str, Any]:
     """Orchestrate a validation dispatch.
 
     1. Build (or reuse) the package.
     2. Render the prompt for the given mode.
     3. Execute via the chosen validator (manual/hermes/claude/codex/grok/openrouter/prime-agent).
+       When the validator finishes, run the deliverable gates; on failure, send the
+       violations back as a revision turn (up to ``gate_revisions`` times).
     4. (Optionally) import results and normalize.
     """
     prefs = load_prefs(project)
@@ -587,6 +662,10 @@ def dispatch(
         skip_normalize = prefs.get("skip_normalize", False)
     if auto_import is None:
         auto_import = prefs.get("auto_import", True)
+    if gates is None:
+        gates = bool(prefs.get("gates", True))
+    if gate_revisions is None:
+        gate_revisions = int(prefs.get("gate_revisions", 1) or 0)
 
     # Step 1: Build (or reuse) the package
     if reuse:
@@ -599,6 +678,7 @@ def dispatch(
             "package": pkg_result, "prompt": None, "zip_path": None,
             "validator": validator, "mode": mode, "conversation": [],
             "import_result": None, "normalize_result": None,
+            "gates": {"enabled": False, "reason": "package blocked"},
             "instructions": "Package blocked by blinding lint. Use --force to override.",
         }
 
@@ -617,9 +697,20 @@ def dispatch(
     conversation: list[dict[str, Any]] = []
     instructions = ""
     collected_dir: Path | None = None
+    gate_result: dict[str, Any] = {"enabled": False, "reason": "gates disabled"}
+    gate_spec: dict[str, Any] | None = None
+    if gates:
+        from .gates import project_question_count
+        gate_spec = {
+            "question_count": project_question_count(project),
+            "report_name": rendered.report_name,
+            "output_folder": rendered.output_folder,
+            "max_revisions": gate_revisions,
+        }
 
     if validator == "manual":
         instructions = _format_manual_instructions(zip_path, rendered, stage, model, run_id)
+        gate_result = {"enabled": False, "reason": "manual validator; gates run on `rrg import`"}
         # In agent mode, generate the conversation plan for reference
         if mode == "agent":
             for i, turn in enumerate(rendered.turns, 1):
@@ -646,7 +737,9 @@ def dispatch(
             if marker.exists():
                 marker.unlink()
 
-        conversation = _run_validator(validator, rendered, slug, str(collected_dir), mode)
+        conversation, gate_result = _run_validator(
+            validator, rendered, slug, str(collected_dir), mode, gate_spec,
+        )
 
     # Step 4: Import
     import_result: dict[str, Any] | None = None
@@ -672,6 +765,7 @@ def dispatch(
                 project, stage, model, collected_dir,
                 run_id=run_id, normalize=not skip_normalize,
                 validator=validator, model_provenance=model_name,
+                gates=gate_result if gate_result.get("enabled") else None,
             )
         shutil.rmtree(collected_dir, ignore_errors=True)
 
@@ -692,6 +786,7 @@ def dispatch(
         "package": pkg_result, "prompt": prompt_summary, "zip_path": zip_path,
         "validator": validator, "mode": mode, "conversation": conversation,
         "import_result": import_result, "normalize_result": normalize_result,
+        "gates": gate_result,
         "instructions": instructions,
         "model_provenance": model_name,
     }

@@ -304,6 +304,95 @@ The import result dict gains:
 
 ---
 
+## 4b. Deliverable Gates (`gates.py`)
+
+### Purpose
+
+The normalizer repairs non-conforming returns *after the fact*, silently. The gates
+enforce the contract *while the validator is still on the line*, so the model fixes
+its own structure and the operator sees exactly what was delivered. The pattern is
+the observation → revision loop from a plan-validation harness: a deterministic
+validator raises coded violations, the harness hands them back as feedback, the model
+gets a bounded number of revisions, and every attempt is recorded.
+
+### Rules
+
+- Every check is a pure function of the files on disk. No model judgment.
+- Every violation carries `code`, `message`, `severity`, `question`, `path` (observed)
+  and `expected` (the fix), so feedback is mechanically actionable.
+- Any violation, hard or soft, triggers a revision turn while revisions remain. Only
+  **hard** violations decide pass/fail (and the exit code); **soft** ones are asked for
+  but never fail the run. A revision that leaves the soft set unchanged stops the loop.
+- Feedback is model-facing and therefore blinding-sensitive: it is built only from
+  filenames, key names and codes — never report contents or operator files. It also
+  tells the model to fix structure only, never to re-run the analysis.
+
+### Checks (per question n)
+
+| Code | Severity | Trigger |
+|---|---|---|
+| `MISSING_FILE` | hard | none of the five required files for this kind exists |
+| `MISNAMED_FILE` | hard | a fuzzy-matched candidate exists under a different name |
+| `MISPLACED_FILE` | hard | canonical name, wrong folder (e.g. `Q1_summary.json` at root) |
+| `EMPTY_FILE` | hard | required file is zero bytes |
+| `INVALID_PNG` | hard | `Q<n>_fig.png` does not start with the PNG magic |
+| `INVALID_JSON` / `SUMMARY_NOT_OBJECT` | hard | summary is not a JSON object |
+| `SUMMARY_MISSING_KEY` | hard | one of `question n test statistic p_value effect_size conclusion` absent |
+| `SUMMARY_QUESTION_MISMATCH` | hard | `question` does not resolve to n |
+| `SUMMARY_BAD_TYPE` | hard | `n`/`statistic`/`p_value` non-numeric, `conclusion` empty |
+| `P_VALUE_ZERO` | hard | `p_value == 0` |
+| `P_VALUE_BOUND_STRING` | soft | `p_value` is a bound like `"<1e-300"` |
+| `P_VALUE_NULL` | soft | `p_value` is null |
+| `SUMMARY_NOT_FLAT` | soft | nested object values (seen in real runs: `groups`) |
+| `ANALYSIS_NO_CSV_WRITE` / `FIG_SCRIPT_NO_CSV_READ` / `FIG_SCRIPT_NO_PNG_WRITE` | hard | script never names the file it must write/read (literal `Q<n>_raw.csv` or a template like `Q{q}_raw.csv` / `Q%d_raw.csv` both count) |
+| `MISSING_DYFA_SECTION` | hard | no `## Q<n>` / `## Question n` heading (same regex as `check_deliverable_contract`) |
+| `MISSING_DYFA_LABELS` | hard | section lacks `D - Do`, `Y - Why`, `F - Find` or `A - Answer` |
+| `FIGURE_NOT_EMBEDDED` | hard | section never references `Q<n>_fig.png` |
+
+Run-level: `MISSING_REPORT` (hard), `REPORT_MISNAMED` (soft, found under a fallback
+name), `MISSING_INDEX` (hard, `RAW.md` / `SUMMARY.md`), `NO_QUESTION_COUNT` (soft).
+
+### Deliverable root
+
+Prompts say "put all work in {OUTPUT_FOLDER}", so a conforming validator may nest its
+output. `locate_deliverable_root` prefers `work_dir/OUTPUT_FOLDER` when it holds
+question files, then `work_dir`, then whichever folder holds the most question-numbered
+files. Near-miss detection is `rglob`-based, so a misplaced file is reported with both
+its observed and expected path.
+
+### Module
+
+```python
+def check_gates(work_dir, question_count, report_name="", *, output_folder=None) -> GateResult
+GateResult.passed / .hard / .soft
+GateResult.as_observation() -> dict     # machine-readable, JSON-serializable
+GateResult.feedback(attempt, max_revisions) -> str   # the revision turn
+def project_question_count(project) -> int
+def project_report_name(project, stage, model) -> str
+def gate_record(result, *, source) -> dict   # same shape the dispatch loop produces
+```
+
+### Integration
+
+- `dispatch.py::_gate_loop` runs after the validator's final turn (CLI validators only;
+  `openrouter` has no filesystem). Revision turns reuse the session id and are appended
+  to the conversation as `Gate revision k` with the triggering observation attached.
+- `dispatch()` gains `gates: bool | None` and `gate_revisions: int | None`; prefs
+  `gates` (True) and `gate_revisions` (1) supply defaults. CLI: `--no-gates`,
+  `--gate-revisions N`. Exit code `3` when gates still fail.
+- `import_run(..., gates=record)` writes `GATES.json` and a `RUN_INFO.md` line. With no
+  record (manual `rrg import`), it gates once on the files as returned, *before*
+  normalization renames anything.
+- `eval_run` reads `GATES.json` and surfaces it in the report.
+
+### Tests (`test_gates.py`)
+
+Pure checks (conforming, empty, misnamed/misplaced, schema, real-world soft shapes,
+PNG/empty, report sections, fallback report name, script advisories, nested root,
+feedback content and blinding), the dispatch loop with a stateful stand-in validator
+(revise-and-pass, exhausted revisions still import, disabled, revisions=0, prefs),
+openrouter skip, import-time record before normalization, eval surfacing, pref coercion.
+
 ## 5. Wizard (`wizard.py`)
 
 ### Purpose

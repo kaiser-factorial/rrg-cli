@@ -75,6 +75,14 @@ RRG_real_root/
   normalize. 7 validators: manual, hermes, claude, codex, grok, pool, openrouter.
   3 modes: discuss, nodiscuss, agent. Multi-turn via session ID (parsed from each
   validator's JSON output). `--reuse`, `--dry-run`, `--force`.
+- **Deliverable gates** (`gates.py`, 2026-09-02) — deterministic checks of the returned
+  file structure (names, locations, summary.json schema, `p_value != 0`, PNG magic,
+  DYFA labels + embedded figure, RAW/SUMMARY index, scripts naming their CSV/PNG). Any
+  violation becomes a coded revision turn to the same validator session, up to
+  `gate_revisions` (default 1); only hard violations fail the run.
+  Result → `GATES.json` in the run folder, `RUN_INFO.md`, `rrg eval`. Prefs `gates`,
+  `gate_revisions`; flags `--no-gates`, `--gate-revisions N`; exit 3 on final failure.
+  Manual `rrg import` gates once, pre-normalization. See AGENTIC_CLI_DESIGN.md §4b.
 - **`rrg import`** — auto-normalizes (fuzzy file matching, stat parsing from text).
   `--skip-normalize` opts out.
 - **`rrg wizard`** — 5-step interactive walkthrough. `--non-interactive`, `--prefs`.

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Deterministic deliverable gates (`gates.py`): after a CLI validator's final turn,
+  `rrg dispatch` checks the returned structure against the deliverable contract and
+  sends coded violations back as a revision turn (default 1, `--gate-revisions N`,
+  `--no-gates`; prefs `gates`, `gate_revisions`). Hard violations (files, summary
+  schema, DYFA, scripts naming their CSV/PNG) fail the run; advisory ones are asked
+  for but never fail it. Every attempt is recorded in
+  `GATES.json`, `RUN_INFO.md`, and `rrg eval`; exit code 3 when gates still fail.
+  `rrg import` gates manual returns once, before normalization.
+- `rrg prefs --set` now validates integer prefs (`gate_revisions`).
+
 ## 0.1.0
 
 - Initial standalone package.

@@ -277,9 +277,16 @@ The dispatch command:
 1. Builds the blinded package zip (blinding lint blocks if secrets leak)
 2. Extracts it to a temp dir outside the project (isolation)
 3. Sends the prompt turns to the validator via the chosen CLI
-4. Auto-imports the validator's output back into the project
-5. Auto-normalizes non-conforming file names
-6. Checks for blinding breaches (hash comparison against the answer key)
+4. Runs the deterministic deliverable gates on the work dir; if the structure
+   deviates (misnamed files, missing summary keys, `p_value: 0`, missing DYFA
+   labels, ...) it sends the coded violation list back as a revision turn and
+   re-checks, up to `--gate-revisions N` times (default 1; `--no-gates` to skip)
+5. Auto-imports the validator's output back into the project, writing `GATES.json`
+6. Auto-normalizes non-conforming file names
+7. Checks for blinding breaches (hash comparison against the answer key)
+
+Exit code `3` means the gates still failed after the last revision — the files were
+imported anyway; read `GATES.json` in the run folder for the remaining violations.
 
 ---
 

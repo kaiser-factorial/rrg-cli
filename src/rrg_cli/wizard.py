@@ -257,6 +257,8 @@ def wizard_prefs_editor(project: Project) -> dict[str, Any]:
     print(f"  mode: {', '.join(MODE_OPTIONS)}")
     print(f"  skip_normalize: true, false")
     print(f"  auto_import: true, false")
+    print(f"  gates: true, false")
+    print(f"  gate_revisions: 0, 1, 2, ...")
     print(f"  (or type 'reset' to restore defaults)")
 
     try:
@@ -293,9 +295,12 @@ def wizard_prefs_editor(project: Project) -> dict[str, Any]:
     if not value:
         return prefs
 
-    # Type conversion for bool keys
-    if key in ("skip_normalize", "auto_import"):
-        value = value.lower() in ("true", "yes", "1")
+    from .prefs import coerce_pref
+    try:
+        value = coerce_pref(key, value)
+    except ValueError as exc:
+        print(f"  {exc}")
+        return prefs
 
     save_prefs(project, {key: value})
     print(f"Saved .rrg_prefs.yaml")

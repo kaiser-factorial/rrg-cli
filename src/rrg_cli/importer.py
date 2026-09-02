@@ -235,12 +235,21 @@ def _write_run_info(
     model_provenance: str | None = None,
     breach: dict[str, Any] | None = None,
     normalize_result: dict[str, Any] | None = None,
+    gates: dict[str, Any] | None = None,
 ) -> None:
     """Write a RUN_INFO.md to the run folder with metadata for human reference."""
     from datetime import date
     today = date.today().isoformat()
     breach = breach or {}
     norm = normalize_result or {}
+    if gates and gates.get("enabled"):
+        revisions = gates.get("revisions", 0)
+        gate_line = (
+            f"- **Deliverable gates**: {'PASS' if gates.get('passed') else 'FAIL'} "
+            f"after {revisions} revision(s) — {gates.get('summary', '')} (see GATES.json)"
+        )
+    else:
+        gate_line = "- **Deliverable gates**: not run"
 
     lines = [
         f"# Run Info — {destination.name}",
@@ -261,6 +270,7 @@ def _write_run_info(
         "",
         f"- **Breach check**: {'BREACH DETECTED' if breach.get('copied_secrets') else 'CLEAN'}",
         f"- **Ran inside project**: {'yes (warning)' if breach.get('ran_inside_project') else 'no'}",
+        gate_line,
         f"- **Normalization**: {len(norm.get('files_moved', []))} file(s) renamed, "
         f"{len(norm.get('summary_json_created', []))} summary.json created"
         if norm else "- **Normalization**: skipped",
@@ -287,7 +297,16 @@ def import_run(
     normalize: bool = True,
     validator: str | None = None,
     model_provenance: str | None = None,
+    gates: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Copy a returned folder/zip into its run folder, then check, normalize, and record.
+
+    ``gates`` is the dispatch-time gate record (with its revision history) when the
+    validator ran under ``rrg dispatch``. When absent, the gates are run once here on the
+    files exactly as returned — before normalization touches them — so the record always
+    reflects what the validator actually delivered. Either way the record is written to
+    ``GATES.json`` in the run folder and summarized in ``RUN_INFO.md``.
+    """
     if source is None:
         raise RRGError("a returned folder or .zip is required")
     source = Path(source).expanduser().resolve()
@@ -352,6 +371,20 @@ def import_run(
         ran_inside_project=breach["ran_inside_project"],
     )
 
+    # Deliverable gates on the files as returned (before normalization renames anything).
+    if gates is None:
+        from .gates import check_gates, gate_record, project_question_count, project_report_name
+        gates = gate_record(
+            check_gates(
+                destination, project_question_count(project),
+                project_report_name(project, stage_id, roster_entry.get("model") if roster_entry else model_query),
+            ),
+            source="import",
+        )
+    (destination / "GATES.json").write_text(
+        json.dumps(gates, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+    )
+
     # Auto-normalize non-conforming returns (unless skipped).
     normalize_result: dict[str, Any] | None = None
     if normalize:
@@ -362,7 +395,7 @@ def import_run(
     _write_run_info(
         destination, stage_id, model_query, run_id, run_value,
         validator=validator, model_provenance=model_provenance,
-        breach=breach, normalize_result=normalize_result,
+        breach=breach, normalize_result=normalize_result, gates=gates,
     )
 
     return {
@@ -376,6 +409,7 @@ def import_run(
         "count": len(imported),
         "breach": breach,
         "normalize": normalize_result,
+        "gates": gates,
         "validator": validator,
         "model_provenance": model_provenance,
     }

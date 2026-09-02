@@ -54,8 +54,12 @@ def eval_run(project: Project, run_path: Path) -> dict[str, Any]:
     # File count
     file_count = sum(1 for p in run_path.rglob("*") if p.is_file() and p.name != ".DS_Store")
 
+    # Gate record written at dispatch/import time (what the validator actually delivered,
+    # and how many revision turns it took to get there).
+    gates = _read_gates(run_path)
+
     # Build report
-    report = _build_report(contract, breach, grading_status, file_count, run_value)
+    report = _build_report(contract, breach, grading_status, file_count, run_value, gates)
 
     return {
         "run": run_value,
@@ -63,8 +67,20 @@ def eval_run(project: Project, run_path: Path) -> dict[str, Any]:
         "deliverable_contract": contract,
         "breach": breach,
         "grading": grading_status,
+        "gates": gates,
         "report": report,
     }
+
+
+def _read_gates(run_path: Path) -> dict[str, Any] | None:
+    path = run_path / "GATES.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def _inside_tree(root: Path, path: Path) -> bool:
@@ -112,6 +128,7 @@ def _build_report(
     grading: dict[str, Any],
     file_count: int,
     run_value: str,
+    gates: dict[str, Any] | None = None,
 ) -> str:
     lines = [
         f"# RRG Eval Report — {run_value}",
@@ -119,6 +136,12 @@ def _build_report(
         f"## Deliverable contract",
         "",
     ]
+    if gates and gates.get("enabled"):
+        status = "PASS" if gates.get("passed") else "FAIL"
+        lines.append(
+            f"  Gates at {gates.get('source', 'dispatch')}: {status} after "
+            f"{gates.get('revisions', 0)} revision(s) — {gates.get('summary', '')}"
+        )
     if contract["all_conform"]:
         lines.append("  PASS — all questions conform to the deliverable contract.")
     else:

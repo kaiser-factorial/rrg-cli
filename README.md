@@ -59,10 +59,11 @@ Project setup
 Build & dispatch
   rrg package --stage S --model M        stage, lint, publish, and log a package
                                          (--dry-run, --force, --label L)
-  rrg dispatch --stage S --model M       build + run + import in one step
+  rrg dispatch --stage S --model M       build + run + gate + import in one step
                                          (--validator V, --mode M, --reuse,
                                           --dry-run, --skip-normalize,
-                                          --no-auto-import, --force)
+                                          --no-auto-import, --force,
+                                          --no-gates, --gate-revisions N)
   rrg lint PACKAGE --stage S             lint an existing outgoing package
   rrg prompt --stage S --model M         render the stage prompt
                                          (--turn N, --mode discuss|nodiscuss)
@@ -138,7 +139,42 @@ rrg prefs              # view current
 rrg prefs --reset      # back to defaults
 ```
 
-Keys: `validator`, `mode`, `skip_normalize`, `auto_import`.
+Keys: `validator`, `mode`, `skip_normalize`, `auto_import`, `gates`, `gate_revisions`.
+
+### Deliverable gates
+
+The deliverable contract in `study.yaml` is stated to the validator in prose. The
+gates re-state it as deterministic file checks and enforce it while the validator is
+still on the line. When a CLI validator (`hermes`, `claude`, `codex`, `grok`, `pool`)
+finishes its last turn, `rrg dispatch` checks the work dir for, per question, the
+five required files (`Q<n>_analysis.py`, `raw/Q<n>_raw.csv`, `Q<n>_fig.py`,
+`Q<n>_fig.png`, `raw/Q<n>_summary.json`), the summary JSON schema (required keys,
+numeric types, `question` matching `n`, `p_value` never `0`), a real PNG, and a
+DYFA section in the report with all four labels and the figure embedded, plus
+`RAW.md` and `SUMMARY.md`.
+
+Every violation is a coded observation with the offending path and the expected
+one (`MISNAMED_FILE`, `MISPLACED_FILE`, `MISSING_FILE`, `SUMMARY_MISSING_KEY`,
+`P_VALUE_ZERO`, `MISSING_DYFA_LABELS`, `FIG_SCRIPT_NO_CSV_READ`, ...). Any
+violation earns a revision turn: the list goes back to the same session ("fix the
+structure only, do not re-run the analysis") and the gates run again, up to
+`gate_revisions` times (default 1). Only *hard* violations decide pass/fail. *Soft*
+ones — a nested object in the summary JSON, a `"<1e-300"` p-value string, a null
+p-value — are asked for but never fail the run, and if a revision leaves them
+unchanged the loop stops rather than repeating the same request.
+
+The outcome, including every attempt's observation, is written to `GATES.json` in
+the run folder and summarized in `RUN_INFO.md` and `rrg eval`, so a run that needed
+a revision is distinguishable from one that conformed first time. `rrg dispatch`
+exits `3` when the gates still fail after the last revision; the files are imported
+regardless. Manual returns are gated once at `rrg import` (before normalization) so
+the record shows what was actually delivered.
+
+```bash
+rrg dispatch --stage replication --model default --validator hermes --gate-revisions 2
+rrg dispatch ... --no-gates            # skip entirely
+rrg prefs --set gate_revisions=0       # report only, never send a revision turn
+```
 
 ### Output normalizer
 

@@ -173,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     prefs_cmd = sub.add_parser("prefs", help="view or set user preferences")
     _add_project_args(prefs_cmd)
-    prefs_cmd.add_argument("--set", metavar="KEY=VALUE", action="append", help="set a preference (e.g. --set executor=hermes)")
+    prefs_cmd.add_argument("--set", metavar="KEY=VALUE", action="append", help="set a preference (e.g. --set validator=hermes)")
     prefs_cmd.add_argument("--reset", action="store_true", help="reset preferences to defaults")
     prefs_cmd.add_argument("--json", action="store_true")
 
@@ -191,6 +191,10 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_cmd.add_argument("--skip-normalize", action="store_true")
     dispatch_cmd.add_argument("--no-auto-import", action="store_true")
     dispatch_cmd.add_argument("--force", action="store_true")
+    dispatch_cmd.add_argument("--no-gates", action="store_true",
+                              help="skip the deterministic deliverable gates after the validator finishes")
+    dispatch_cmd.add_argument("--gate-revisions", type=int, default=None, metavar="N",
+                              help="revision turns a failing gate may trigger (default: from prefs, 1; 0 = report only)")
     dispatch_cmd.add_argument("--json", action="store_true")
 
     wizard_cmd = sub.add_parser("wizard", help="interactive setup and dispatch walkthrough")
@@ -308,6 +312,13 @@ def run(args: argparse.Namespace) -> int:
             elif breach.get("ran_inside_project"):
                 print("  ⚠ note: returned outputs came from inside the project tree; "
                       "isolation may have been skipped.")
+            gates = result.get("gates") or {}
+            if gates.get("enabled"):
+                mark = "✓" if gates.get("passed") else "✗"
+                print(f"  {mark} Deliverable gates: {gates.get('summary', '')} (details in GATES.json)")
+                for violation in ((gates.get("final") or {}).get("hard") or [])[:8]:
+                    q = f"Q{violation['question']} " if violation.get("question") else ""
+                    print(f"      {q}[{violation['code']}] {violation['message']}")
         return 3 if (breach.get("copied_secrets")) else 0
     if args.command == "acknowledge-breach":
         from . import grading as grading_module
@@ -447,8 +458,11 @@ def run(args: argparse.Namespace) -> int:
                     raise RRGError(f"invalid --set value (expected KEY=VALUE): {item}")
                 key, value = item.split("=", 1)
                 key = key.strip()
-                if key in ("skip_normalize", "auto_import"):
-                    value = value.lower() in ("true", "yes", "1")
+                from .prefs import coerce_pref
+                try:
+                    value = coerce_pref(key, value)
+                except ValueError as exc:
+                    raise RRGError(str(exc))
                 save_prefs(project, {key: value})
             prefs = load_prefs(project)
             _emit({"prefs": prefs}, args.json) if args.json else print("Saved.")
@@ -465,17 +479,24 @@ def run(args: argparse.Namespace) -> int:
         from .dispatch import dispatch
         result = dispatch(
             project, args.stage, args.model,
-            executor=args.validator, mode=args.mode, label=args.label,
+            validator=args.validator, mode=args.mode, label=args.label,
             dry_run=args.dry_run, reuse=args.reuse,
             skip_normalize=args.skip_normalize or None,
             auto_import=None if not args.no_auto_import else False,
             force=args.force,
+            gates=False if args.no_gates else None,
+            gate_revisions=args.gate_revisions,
         )
         if args.json:
             _emit(result, True)
         else:
             _print_dispatch_result(result)
-        return 2 if result["package"].get("blocked") else 0
+        if result["package"].get("blocked"):
+            return 2
+        gates = result.get("gates") or {}
+        if gates.get("enabled") and not gates.get("passed"):
+            return 3
+        return 0
     if args.command == "wizard":
         from .wizard import run_wizard
         result = run_wizard(project, non_interactive=args.non_interactive,
@@ -664,6 +685,19 @@ def _print_dispatch_result(result):
             print(f"    Turn {i} \u2014 {t['title']}")
     if result.get("conversation"):
         print(f"  Conversation: {len(result['conversation'])} exchange(s)")
+    gates = result.get("gates") or {}
+    if gates.get("enabled"):
+        mark = "✓" if gates.get("passed") else "✗"
+        print(f"  {mark} Deliverable gates: {gates.get('summary', '')} "
+              f"({gates.get('revisions', 0)}/{gates.get('max_revisions', 0)} revision(s) used, root `{gates.get('root', '.')}`)")
+        if gates.get("stopped"):
+            print(f"      note: {gates['stopped']}")
+        final = gates.get("final") or {}
+        for violation in (final.get("hard") or [])[:12]:
+            q = f"Q{violation['question']} " if violation.get("question") else ""
+            print(f"      {q}[{violation['code']}] {violation['message']}")
+        if len(final.get("hard") or []) > 12:
+            print(f"      … {len(final['hard']) - 12} more in GATES.json")
     if result.get("import_result"):
         imp = result["import_result"]
         print(f"  Imported: {imp['count']} files into {imp['run']}")

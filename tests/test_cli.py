@@ -26,6 +26,23 @@ def test_cli_end_to_end(tmp_path: Path, capsys):
     assert "original method" in capsys.readouterr().out.lower()
 
 
+def test_cli_dispatch_forwards_validator_option(tmp_path: Path, capsys):
+    root = tmp_path / "dispatch-project"
+    assert main(["init", str(root), "--json"]) == 0
+    capsys.readouterr()
+    assert main(["convert", "--root", str(root), "--json"]) == 0
+    capsys.readouterr()
+
+    assert main([
+        "dispatch", "--root", str(root), "--stage", "replication",
+        "--model", "ReplicationModel", "--validator", "manual",
+        "--dry-run", "--json",
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["validator"] == "manual"
+    assert result["package"]["dry_run"] is True
+
+
 def test_cli_runs_registry_and_archive_round_trip(tmp_path: Path, capsys):
     root = tmp_path / "p"
     assert main(["init", str(root), "--json"]) == 0
