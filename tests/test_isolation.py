@@ -161,6 +161,42 @@ def test_escape_is_detected_quarantined_and_blocks_grading(ready_project: Projec
     assert "Wrote inside project**: 2 file(s) (BREACH" in (run_dir / "RUN_INFO.md").read_text()
 
 
+def test_detect_escapes_scopes_project_vs_checkout(tmp_path: Path) -> None:
+    """Only changes under the project are breaches; the rest of the checkout is a note.
+    (The ready_project fixture has no enclosing checkout, so this is exercised directly.)"""
+    from rrg_cli.dispatch import _detect_escapes, _snapshot_tree
+    checkout = tmp_path / "checkout"
+    project = checkout / "workspace" / "study"
+    pkg = project / "operator" / "_packages" / "replication" / "M__abc"
+    pkg.mkdir(parents=True)
+    (checkout / "src").mkdir()
+    (checkout / "src" / "extract.py").write_text("v1")
+    (pkg / "_provenance.json").write_text("{}")
+    collected = tmp_path / "collected"
+    collected.mkdir()
+    before = _snapshot_tree(checkout)
+    (checkout / "src" / "extract.py").write_text("v2 — operator editing source mid-run")
+    (checkout / "workspace" / "other_study.txt").write_text("sibling study")
+    (pkg / "Q1_fig.png").write_bytes(b"\x89PNG")
+    (project / "stray.txt").write_text("x")
+    escapes = _detect_escapes(checkout, before, _snapshot_tree(checkout), str(pkg), collected, project_root=project)
+    assert escapes["count"] == 4
+    breaches = {r["path"]: r for r in escapes["breaches"]}
+    notes = {r["path"] for r in escapes["notes"]}
+    assert set(breaches) == {"workspace/study/stray.txt", "workspace/study/operator/_packages/replication/M__abc/Q1_fig.png"}
+    assert notes == {"src/extract.py", "workspace/other_study.txt"}
+    assert breaches["workspace/study/operator/_packages/replication/M__abc/Q1_fig.png"]["quarantined_to"] == "Q1_fig.png"
+    assert (collected / "Q1_fig.png").exists() and not (pkg / "Q1_fig.png").exists()
+
+
+def test_gate_python_skips_interpreters_inside_deny_list(tmp_path: Path) -> None:
+    from rrg_cli.gates import resolve_gate_python
+    denied_root = Path(sys.executable).resolve().parents[2]
+    python, note = resolve_gate_python(tmp_path, preferred=sys.executable, deny=[str(denied_root)])
+    assert python is None or Path(python).resolve() != Path(sys.executable).resolve()
+    assert "skipped (inside sandbox deny list)" in note or python is not None
+
+
 def test_clean_dispatch_records_no_escape(ready_project: Project) -> None:
     def side_effect(prompt, slug, work_dir, session_id=None):
         (Path(work_dir) / "SUMMARY.md").write_text("## Q1\nok")

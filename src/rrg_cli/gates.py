@@ -601,13 +601,28 @@ def _probe(exe: str) -> bool:
     return _PROBE_CACHE[exe]
 
 
-def resolve_gate_python(work_dir: str | Path, preferred: str = "") -> tuple[str | None, str]:
+def _under_any(path: str, roots: list[str]) -> bool:
+    real = Path(os.path.realpath(path))
+    for root in roots:
+        try:
+            real.relative_to(Path(os.path.realpath(root)))
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def resolve_gate_python(
+    work_dir: str | Path, preferred: str = "", deny: list[str] | None = None,
+) -> tuple[str | None, str]:
     """The interpreter to run figure scripts with: (path or None, note).
 
     Order: the configured ``gate_python``; a ``.venv`` the validator built in the work dir;
     then ``python3``, ``/usr/bin/python3`` and this process's interpreter — the first that
     imports matplotlib and pandas wins. The scripts are validator code and need the
-    validator's stack, which this process's venv may not carry.
+    validator's stack, which this process's venv may not carry. Interpreters living under
+    a ``deny`` path are skipped: the scripts run inside the sandbox, which could not even
+    read such an interpreter (RRG's own venv sits inside the denied checkout).
     """
     candidates: list[str] = []
     if preferred:
@@ -617,14 +632,21 @@ def resolve_gate_python(work_dir: str | Path, preferred: str = "") -> tuple[str 
         candidates.append(str(venv))
     candidates += ["python3", "/usr/bin/python3", sys.executable]
     tried: list[str] = []
+    skipped: list[str] = []
     for candidate in candidates:
         exe = candidate if os.path.isabs(candidate) else shutil.which(candidate)
-        if not exe or not os.path.exists(exe) or exe in tried:
+        if not exe or not os.path.exists(exe) or exe in tried or exe in skipped:
+            continue
+        if deny and _under_any(exe, deny):
+            skipped.append(exe)
             continue
         tried.append(exe)
         if _probe(exe):
             return exe, f"probed {len(tried)} interpreter(s)"
-    return None, "no interpreter imports matplotlib and pandas; tried " + ", ".join(tried)
+    note = "no interpreter imports matplotlib and pandas; tried " + ", ".join(tried)
+    if skipped:
+        note += "; skipped (inside sandbox deny list) " + ", ".join(skipped)
+    return None, note
 
 
 # Fraction of pixels allowed to differ before a regenerated figure counts as a different
@@ -797,6 +819,7 @@ def check_gates(
     exec_timeout: int = EXEC_TIMEOUT,
     exec_total_timeout: int = EXEC_TOTAL_TIMEOUT,
     exec_prefix: list[str] | None = None,
+    exec_deny: list[str] | None = None,
 ) -> GateResult:
     """Run every deliverable gate against a validator's output tree.
 
@@ -864,7 +887,7 @@ def check_gates(
         python = exec_python
         note = "given"
         if python is None:
-            python, note = resolve_gate_python(work_dir)
+            python, note = resolve_gate_python(work_dir, deny=exec_deny)
         result.exec_info = run_figure_gate(
             root, executable, python=python, timeout=exec_timeout,
             total_timeout=exec_total_timeout, prefix=exec_prefix, out=out,

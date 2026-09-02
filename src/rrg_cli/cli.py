@@ -194,7 +194,8 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_cmd.add_argument("--no-auto-import", action="store_true")
     dispatch_cmd.add_argument("--force", action="store_true")
     dispatch_cmd.add_argument("--no-gates", action="store_true",
-                              help="skip the deterministic deliverable gates after the validator finishes")
+                              help="skip the gate/revision loop after the validator finishes "
+                                   "(import still records a one-shot GATES.json)")
     dispatch_cmd.add_argument("--gate-revisions", type=int, default=None, metavar="N",
                               help="revision turns a failing gate may trigger (default: from prefs, 1; 0 = report only)")
     dispatch_cmd.add_argument("--no-exec-gates", action="store_true",
@@ -700,12 +701,15 @@ def _print_dispatch_result(result):
         else:
             print(f"  ⚠ Sandbox: none ({sandbox.get('reason', '')})")
     escapes = result.get("escapes") or {}
-    if escapes.get("count"):
-        print(f"  ✗ ISOLATION BREACH: validator changed {escapes['count']} file(s) inside the project tree"
+    if escapes.get("breaches"):
+        print(f"  ✗ ISOLATION BREACH: validator changed {len(escapes['breaches'])} file(s) inside the project"
               f" ({len(escapes.get('quarantined') or [])} quarantined into the run)")
-        for record in escapes["records"][:8]:
+        for record in escapes["breaches"][:8]:
             extra = f" → quarantined to {record['quarantined_to']}" if record.get("quarantined_to") else ""
             print(f"      {record['change']}: {record['path']}{extra}")
+    if escapes.get("notes"):
+        print(f"  note: {len(escapes['notes'])} file(s) elsewhere in the checkout changed during the run"
+              " (not attributed to the validator; see escapes.notes in --json)")
     gates = result.get("gates") or {}
     if gates.get("enabled"):
         mark = "✓" if gates.get("passed") else "✗"

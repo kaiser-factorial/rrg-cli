@@ -438,6 +438,7 @@ def _gate_loop(
         "exec_figures": bool(gate_spec.get("exec_figures", False)),
         "exec_python": gate_spec.get("exec_python") or None,
         "exec_prefix": list(gate_spec.get("exec_prefix") or []),
+        "exec_deny": list(gate_spec.get("exec_deny") or []),
     }
     result = check_gates(work_dir, **kwargs)
     history = [result.as_observation()]
@@ -481,7 +482,7 @@ def _gate_loop(
 INVENTORY_LIMIT = 200
 
 
-def _inventory_preamble(work_dir: str) -> str:
+def _inventory_preamble(work_dir: str, sandboxed: bool = False) -> str:
     """Tell the validator where it is and what it has, before anything else.
 
     A real run showed an agent that never listed its own working directory: it searched
@@ -493,13 +494,17 @@ def _inventory_preamble(work_dir: str) -> str:
         str(p.relative_to(root)) for p in root.rglob("*")
         if p.is_file() and p.name != ".DS_Store" and not p.name.startswith(".rrg_")
     )
+    enforcement = (
+        " Access to the rest of this machine's project files is denied at the operating-system level."
+        if sandboxed else ""
+    )
     lines = [
         "## Working directory",
         "",
         f"You are working in `{root}`. Every input you need is already in this directory, "
         "and every output you produce must be written inside it. Do not search, read, or "
         "write anywhere outside this directory — nothing else on this machine is part of "
-        "the task, and access outside it is denied.",
+        f"the task.{enforcement}",
         "",
         "Files present:",
     ]
@@ -523,7 +528,7 @@ def _run_validator(
     messages: list[dict[str, str]] = []  # for openrouter conversation accumulation
 
     detected_model: str | None = None
-    preamble = _inventory_preamble(work_dir) if validator != "openrouter" else ""
+    preamble = _inventory_preamble(work_dir, sandboxed=bool(_SANDBOX_PREFIX)) if validator != "openrouter" else ""
     for i, turn in enumerate(rendered.turns, 1):
         text = f"{preamble}\n\n{turn.text}" if (i == 1 and preamble) else turn.text
         if validator == "openrouter":
@@ -615,23 +620,45 @@ def _detect_escapes(
     after: dict[str, tuple[int, int]],
     package_dir: str | None,
     collected_dir: Path,
+    project_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Diff two snapshots. New files inside the published package dir are the validator's
-    deliverables landing in the wrong place: move them into the collection dir (so import
-    still works and the package is pristine again) and record the escape. Everything else
-    is recorded in place."""
+    """Diff two snapshots of the watched tree.
+
+    Every change is recorded with a ``scope``: ``project`` for files under the RRG project
+    itself, ``checkout`` for the rest of the git checkout (sibling studies, source code).
+    Only project-scope changes are treated as an isolation breach — an operator editing
+    source, or a second dispatch building its package in another workspace, changes the
+    checkout during a validator run and must not block grading. New files inside the
+    published package dir are the validator's deliverables landing in the wrong place:
+    they are moved into the collection dir (so import still works and the package is
+    pristine again) and the escape is recorded.
+    """
     new = sorted(k for k in after if k not in before)
     modified = sorted(k for k in after if k in before and after[k] != before[k])
     removed = sorted(k for k in before if k not in after)
-    pkg_rel: str | None = None
-    if package_dir:
+
+    def _rel_under(path: str | Path | None) -> str | None:
+        if not path:
+            return None
         try:
-            pkg_rel = str(Path(package_dir).resolve().relative_to(root))
+            rel = str(Path(path).resolve().relative_to(root))
         except ValueError:
-            pkg_rel = None
+            return None
+        return "" if rel == "." else rel
+
+    pkg_rel = _rel_under(package_dir)
+    proj_rel = _rel_under(project_root) if project_root is not None else ""
+
+    def _scope(rel: str) -> str:
+        if proj_rel is None:
+            return "checkout"
+        if proj_rel == "" or rel == proj_rel or rel.startswith(proj_rel + os.sep):
+            return "project"
+        return "checkout"
+
     records: list[dict[str, str]] = []
     for rel in new:
-        record = {"path": rel, "change": "new"}
+        record = {"path": rel, "change": "new", "scope": _scope(rel)}
         if pkg_rel and rel.startswith(pkg_rel + os.sep):
             inner = Path(rel).relative_to(pkg_rel)
             target = collected_dir / inner
@@ -643,12 +670,15 @@ def _detect_escapes(
                 except OSError:
                     pass
         records.append(record)
-    records.extend({"path": rel, "change": "modified"} for rel in modified)
-    records.extend({"path": rel, "change": "removed"} for rel in removed)
+    records.extend({"path": rel, "change": "modified", "scope": _scope(rel)} for rel in modified)
+    records.extend({"path": rel, "change": "removed", "scope": _scope(rel)} for rel in removed)
+    breaches = [r for r in records if r["scope"] == "project"]
     return {
         "root": str(root),
         "count": len(records),
         "records": records,
+        "breaches": breaches,
+        "notes": [r for r in records if r["scope"] != "project"],
         "quarantined": [r for r in records if r.get("quarantined_to")],
     }
 
@@ -911,6 +941,7 @@ def dispatch(
         sandbox = make_sandbox(project, collected_dir)
         if gate_spec is not None:
             gate_spec["exec_prefix"] = list(sandbox["prefix"])
+            gate_spec["exec_deny"] = list(sandbox["deny"]) if sandbox["prefix"] else []
         tree_root = _tree_root(project)
         before = _snapshot_tree(tree_root)
         global _SANDBOX_PREFIX
@@ -923,6 +954,7 @@ def dispatch(
             _SANDBOX_PREFIX = []
         escapes = _detect_escapes(
             tree_root, before, _snapshot_tree(tree_root), pkg_result.get("package_dir"), collected_dir,
+            project_root=Path(project.root),
         )
 
     # Step 4: Import
@@ -950,7 +982,7 @@ def dispatch(
                 run_id=run_id, normalize=not skip_normalize,
                 validator=validator, model_provenance=model_name,
                 gates=gate_result if gate_result.get("enabled") else None,
-                wrote_inside_project=(escapes or {}).get("records") or [],
+                wrote_inside_project=(escapes or {}).get("breaches") or [],
                 sandbox=sandbox,
             )
         shutil.rmtree(collected_dir, ignore_errors=True)
