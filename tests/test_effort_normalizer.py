@@ -109,6 +109,17 @@ def test_generate_project_is_non_destructive_and_gates_model_dependent_report(tm
     assert study["derived_models"][0]["id"] == "personality-agent"
     assert study["questions"]["metric_spec"] == "shared/METRIC_SPEC.json"
     assert study["original"]["results_file"] == "operator/origin/origin.json"
+    assert config["paths"] == {
+        "shared": "shared",
+        "data": "data",
+        "operator": "operator",
+        "runs": "operator/runs",
+        "packages": "operator/packages",
+        "reviews": "operator/reviews",
+        "grading": "operator/grading",
+        "archive": "operator/archive",
+        "compare_notes": "operator/reviews/compare-notes",
+    }
     assert config["stages"]["robustness"]["enabled"] is False
     assert "result-neutral robustness data" in config["stages"]["robustness"]["blocked_reason"]
     assert project.joinpath("shared/ANALYSIS_CONTRACT.json").is_file()

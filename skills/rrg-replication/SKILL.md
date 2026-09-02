@@ -55,8 +55,9 @@ agent app, and its outputs come back via `rrg import`.
    run **outside the project** (ideally a container), so the operator's secrets are
    unreachable. Do not run a validator inside the project tree.
 6. **Import the return:** `rrg import <returned-folder-or-zip> --stage replication
-   --model MODEL` copies the outputs into `operator/<output_folder>/` with zip-slip
-   protection.
+   --model MODEL` validates the complete untrusted return in staging, gates the actual
+   deliverable root, and atomically installs it into the provenance-selected run. It
+   rejects traversal, duplicate/case-colliding paths, symlinks, and non-empty targets.
 
 ## Deliverable shape (what the validator returns)
 
@@ -64,8 +65,9 @@ A per-question pipeline (`Q…_analysis` → raw results → figure), a per-ques
 summary the scorecard reads (`raw/Q<n>_summary.json`), the DYFA narrative, the report
 named per `stages.replication.report_name`, and a `SUMMARY.md`. Each question reports N +
 subgroup Ns, descriptive inputs, the test statistic + effect size + 95% CI, and a
-one-sentence conclusion. (Exact filenames follow the project's deliverable spec in
-`study.yaml`.)
+one-sentence conclusion. Every `METRIC_SPEC.json` metric and exact `_units` entry must
+appear in the summary; DYFA F/A repeats the same values as machine markers. (Exact
+filenames follow the project's deliverable spec in `study.yaml`.)
 
 ## Grading
 

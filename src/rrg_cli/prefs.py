@@ -3,7 +3,7 @@
 Preferences are stored in ``.rrg_prefs.yaml`` at the project root and provide
 defaults for ``rrg dispatch`` and ``rrg wizard`` so you don't need to pass six
 flags every time.  Per-project (not global) — each study may use different
-executors or modes.
+validators or modes.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 name: rrg-scorecard
 description: >
   Grade a returned validator run against the held-back key: lay each result beside the
-  original, pre-classify a PROVISIONAL verdict per question, and leave every final
+  original with deterministic deltas/statuses, leave a PENDING verdict per question, and leave every final
   verdict to the human grader. Use after `rrg import` brings a run back, to produce a
   versioned SCORECARD. The engine never assigns a final verdict.
 ---
@@ -10,8 +10,8 @@ description: >
 # rrg-scorecard — grade a validator run against the key
 
 Turns an imported validator run into a per-question scorecard that sets each result
-beside the held-back origin material and assigns a verdict. **The engine scaffolds and
-*suggests*; a human assigns every final verdict** — the validator never grades itself,
+beside the held-back origin material. **The engine exposes comparisons; a human assigns
+every final verdict** — the validator never grades itself,
 and neither does the scorecard builder on its own.
 
 The scorecard is **operator-side and withheld** — it contains results and verdicts, so
@@ -20,7 +20,7 @@ lint hard-fails if one is ever staged.
 
 ## Inputs
 
-- `RUN` — the imported run folder under `operator/` (from `rrg import`).
+- `RUN` — the imported run folder (new projects: `operator/runs/<stage>/...`).
 - `STAGE` — `replication | robustness | generalization` (sets the verdict vocabulary).
 - Resolved from config: the **results key** (`origin.results_key` / `study.yaml >
   original.results_key`), the **question map** (`questions_map.yaml`), and the rubric.
@@ -35,11 +35,13 @@ rrg scorecard --run RUN --stage STAGE --model MODEL [--key DIR] [--map FILE]
 ```
 
 It writes `SCORECARD_<stage>_<label>_v<n>.md` (auto-incrementing, noting the prior
-version) into the operator directory.
+version) into the configured reviews directory.
 
 ## Verdict vocabulary
 
-- **REPRODUCED** — same method, numbers match within tolerance.
+- **REPRODUCED** — same method and operator-reviewed results agree. Non-p-value
+  comparisons are exact-only; a p-value inside the pipeline's tolerance is still
+  visibly non-exact and requires judgment.
 - **CONVERGED** — different defensible method, same conclusion (a pass; stronger
   robustness evidence).
 - **DIVERGED** — conclusion or key number disagrees.
@@ -53,26 +55,24 @@ version) into the operator directory.
 
 1. **Maps each question** new # → original label via `questions_map.yaml`, so like is
    compared with like.
-2. **Pulls the validator's headline material** — the numbers in `raw/Q<n>_summary.json`
-   and the per-question line in `SUMMARY.md`.
-3. **Pulls the key's matching material** by the question's *original* number (the
-   origin's `## Q<n>` section — extracted the same way the *Origin* separation matrix
-   checks, so a question marked scoreable there is exactly one this can grade).
-4. **Lays them side by side** with a **PENDING** verdict and the verdict legend. A
-   provisional hint is emitted *only* where a labelled scalar clearly matches within the
-   rubric's tolerance (direction/sign matches; magnitude within bands — r ≈ ±.05; d/η² ≈
-   ±.10; balanced accuracy ≈ ±3 pts; coefficients same sign, overlapping CIs; relative
-   ordering preserved). **Every other row stays PENDING.**
-5. A blank scaffold is explicitly **provisional** and is *rejected if it ever contains a
+2. **Loads the validator summary** and, when present, the public metric spec plus
+   operator-only canonical origin JSON.
+3. **Joins canonical values** by original question, metric id, and declared JSON path,
+   normalizes compatible units, and shows the exact delta and status. Text parsing is
+   used only when canonical records are absent.
+4. **Applies pipeline-owned policy:** all non-p metrics require exact equality; only
+   p-values use absolute tolerance `0.005`, and an inside-band non-exact value is
+   `WITHIN_TOLERANCE`, never exact. Validator output cannot set tolerance.
+5. **Lays comparisons side by side** with a **PENDING** verdict and verdict legend.
+6. A blank scaffold is explicitly **provisional** and is *rejected if it ever contains a
    final verdict* — the engine never grades.
 
 ## Finalizing (human-only)
 
 Final verdicts are assigned in the GUI **Review & Grade** tab (which replaced the older
 separate Compare/Scorecards tabs). Per question it shows: the validator-led **statistics
-comparison** (each stat in `raw/Q<n>_summary.json`, checked for the same value in the
-origin material and marked found / not-found, with the stage's expectation noted —
-replication should match exactly, robustness may legitimately differ), the
+comparison** from the same engine the scorecard uses (status, units, delta, and fixed
+policy), the
 **origin-only figures** the validator didn't report, the **DYFA narratives** side by
 side, the figures, and a **verdict** control. Grading state lives separately as per-run
 JSON; a run is "graded" only when a human confirms a verdict for **every** question.
@@ -102,7 +102,7 @@ first-class finding.
 
 ## Notes
 
-- **Suggested ≠ final.** The builder may pre-classify to save effort, but a human
-  confirms every verdict; nothing is graded autonomously.
+- **Comparison ≠ verdict.** A human confirms every verdict; nothing is graded
+  autonomously.
 - This skill grades **correctness/agreement only** — blinding is `rrg-blinding-lint`'s
   job (at packaging), and input readiness is `rrg preflight`.

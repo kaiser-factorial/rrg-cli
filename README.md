@@ -3,7 +3,8 @@
 `rrg-cli` is the reusable engine behind the RRG research-validation workflow:
 **Replication → Robustness → Generalization**. It packages the right inputs for a
 validator, enforces stage-specific blinding, records provenance, renders staged
-prompts, and scaffolds human grading. It does not run models or grade findings.
+prompts, dispatches supported validator CLIs, imports their outputs, and scaffolds
+human grading. Scientific verdicts remain operator-owned.
 
 ## Install
 
@@ -41,7 +42,8 @@ lives in `src/rrg_cli/templates/project/` — `rrg init` copies it.
 
 ## The CLI
 
-The CLI is the primary interface. All project commands accept `--root`,
+The CLI is the primary interface. All project commands accept `--root` or its
+human-readable alias `--project`, plus
 `--config`, and `--study`. Project discovery: `$RRG_PROJECT_ROOT` → nearest
 `.rrg_root` ancestor → current directory.
 
@@ -50,8 +52,10 @@ The CLI is the primary interface. All project commands accept `--root`,
 ```text
 Project setup
   rrg init [PATH]                        create a project cartridge
-  rrg doctor [--stage S]                 inspect configuration and dependencies
+  rrg doctor|status [--stage S]          inspect configuration and dependencies
   rrg preflight [--stage S]              strict file + prompt readiness gate
+  rrg paths [--json]                     show resolved operator-side locations
+  rrg workspace [PATH] [--json]          find RRG projects in a workspace
   rrg convert [SOURCE]                   create and verify CSV/Parquet derivatives
   rrg wizard [--non-interactive]         interactive 5-step setup walkthrough
                                          (--step N, --prefs, --json)
@@ -59,7 +63,8 @@ Project setup
 Build & dispatch
   rrg package --stage S --model M        stage, lint, publish, and log a package
                                          (--dry-run, --force, --label L)
-  rrg dispatch --stage S --model M       build + run + gate + import in one step
+  rrg dispatch|validate --stage S --model M
+                                          build + run + gate + import in one step
                                          (--validator V, --mode M, --reuse,
                                           --dry-run, --skip-normalize,
                                           --no-auto-import, --force,
@@ -67,13 +72,14 @@ Build & dispatch
                                           --no-exec-gates, --gate-python P)
   rrg lint PACKAGE --stage S             lint an existing outgoing package
   rrg prompt --stage S --model M         render the stage prompt
-                                         (--turn N, --mode discuss|nodiscuss)
+                                         (--turn N, --mode discuss|nodiscuss|agent)
 
 Import & review
   rrg import SOURCE [--stage S --model M]  import validator output (auto-normalizes)
                                            (--run-id ID, --skip-normalize, --exec-gates)
   rrg runs                               list the run registry
-  rrg scorecard --run R --stage S --model M  create a human-grading skeleton
+  rrg scorecard|review --run R --stage S --model M
+                                          create a human-grading review
   rrg eval --run R                       evaluate a run (contract + breach + grading)
 
 Origin intake
@@ -143,6 +149,24 @@ rrg prefs --reset      # back to defaults
 Keys: `validator`, `mode`, `skip_normalize`, `auto_import`, `gates`, `gate_revisions`,
 `gate_exec`, `gate_python`.
 
+### Operator layout
+
+New projects use one explicit operator-side layout. `rrg paths` prints the resolved
+locations instead of requiring callers to infer them:
+
+```text
+operator/
+├── origin/                 held-back canonical results
+├── packages/               immutable outgoing packages + provenance log
+├── runs/<stage>/           one authoritative folder per returned run
+├── reviews/                comparison notes and generated reviews
+├── grading/                operator grading state
+└── archive/                reversible archive
+```
+
+Projects that predate these path keys keep their legacy locations. The GUI and CLI
+read both layouts; RRG does not silently relocate existing evidence.
+
 ### Deliverable gates
 
 The deliverable contract in `study.yaml` is stated to the validator in prose. The
@@ -151,15 +175,18 @@ still on the line. When a CLI validator (`hermes`, `claude`, `codex`, `grok`, `p
 finishes its last turn, `rrg dispatch` checks the work dir for, per question, the
 five required files (`Q<n>_analysis.py`, `raw/Q<n>_raw.csv`, `Q<n>_fig.py`,
 `Q<n>_fig.png`, `raw/Q<n>_summary.json`), the summary JSON schema (required keys,
-numeric types, `question` matching `n`, `p_value` never `0`), a real PNG, and a
-DYFA section in the report with all four labels and the figure embedded, plus
+numeric types, `question` matching `n`, `p_value` never `0`), every metric and unit
+declared by `METRIC_SPEC.json`, declared sum/difference identities, a real PNG, and a
+DYFA section in the report with all four labels, exact machine-readable metric
+markers, and the figure embedded, plus
 `RAW.md` and `SUMMARY.md`.
 
 Every violation is a coded observation with the offending path and the expected
 one (`MISNAMED_FILE`, `MISPLACED_FILE`, `MISSING_FILE`, `SUMMARY_MISSING_KEY`,
 `P_VALUE_ZERO`, `MISSING_DYFA_LABELS`, `FIG_SCRIPT_NO_CSV_READ`, ...). Any
-violation earns a revision turn: the list goes back to the same session ("fix the
-structure only, do not re-run the analysis") and the gates run again, up to
+violation earns a revision turn: codes and artifact coordinates go back to the same
+session, which must repair the return from its own scripts and data, and the gates run
+again, up to
 `gate_revisions` times (default 1). Only *hard* violations decide pass/fail. *Soft*
 ones — a nested object in the summary JSON, a `"<1e-300"` p-value string, a null
 p-value — are asked for but never fail the run, and if a revision leaves them
@@ -187,6 +214,11 @@ exits `3` when the gates still fail after the last revision; the files are impor
 regardless. Manual returns are gated once at `rrg import` (before normalization) so
 the record shows what was actually delivered.
 
+Gate feedback never contains origin values, comparison deltas, or operator-only
+material. The validator-facing metric contract defines identifiers, JSON paths, kinds,
+units, nullability, and safe arithmetic relations only. Origin values live separately
+in `operator/origin/origin.json` and are loaded only by operator-side review.
+
 ```bash
 rrg dispatch --stage replication --model default --validator hermes --gate-revisions 2
 rrg dispatch ... --no-gates            # skip entirely
@@ -201,10 +233,12 @@ ADR 0001 put the validator in a temp dir and trusted it to stay there. A real ru
 not (see ADR 0003): the agent searched the home directory, found the project, and
 worked inside the published package. Isolation is now enforced three ways:
 
-- **OS sandbox.** On macOS every validator command runs under `sandbox-exec` with
-  file reads and writes denied under the project root, the enclosing git checkout,
-  and any `dispatch.sandbox_deny` paths in `rrg.yaml`. The agent's shell inherits
-  the denial. `dispatch.sandbox: off` disables it; other platforms have no wrapper yet.
+- **OS sandbox.** On macOS every validator command runs under `sandbox-exec`. Reads
+  and writes are denied under the project and enclosing checkout, and writes are
+  allowed only in the run workspace, `/dev`, the selected validator's session-state
+  directory, and explicit `dispatch.sandbox_write_allow` roots. The sandbox record
+  states whether write enforcement was actually applied. `dispatch.sandbox: off`
+  disables it; unsupported/restricted hosts fall back to write detection.
 - **Write detection.** The checkout is snapshotted before and after the run. Any
   file the validator created, changed, or removed inside it is an isolation breach:
   recorded on the run, printed as `ISOLATION BREACH`, and blocking grading until
@@ -219,11 +253,37 @@ validator now uses `hermes chat -Q --resume` so turns share one session
 
 ### Output normalizer
 
-`rrg import` auto-normalizes non-conforming validator returns. If a validator
-produces `q1_analysis.py` instead of `Q1_analysis.py`, or omits
+`rrg import` first validates the entire untrusted return in temporary staging. It
+rejects traversal, duplicate/case-colliding archive paths, and source symlinks before
+writing any run file; strips one transport-only wrapper; gates the actual staged
+deliverable root; and atomically installs it into the provenance-selected run folder.
+It never overwrites a non-empty run. Automated dispatch imports only files created or
+changed by the validator, not unchanged package inputs.
+
+After that boundary is safe, import auto-normalizes non-conforming validator returns.
+If a validator produces `q1_analysis.py` instead of `Q1_analysis.py`, or omits
 `raw/Q<n>_summary.json`, the normalizer fuzzy-matches files, parses stats from
 text output, and creates the canonical deliverable shape. Originals are
 preserved — files are copied, never deleted. Use `--skip-normalize` to opt out.
+
+### Robustness and learned-model prerequisites
+
+A robustness project may point `study.yaml > held_constants.contract` at an approved
+`rrg.analysis-contract.v1` JSON record. It fixes the population, unit of analysis,
+inclusion/exclusion rules, time window, constructs/outcomes, and missingness policy,
+while requiring independent method choice and forbidding origin findings, expected
+values, and tolerances. If the Effort normalizer's audit says the selected robustness
+input still contains derived or answer-bearing columns, packaging stops.
+
+Any learned scorer, classifier, embedding, or measurement model that creates variables
+used downstream belongs under `study.yaml > derived_models`. Its operator-only
+`rrg.model-evaluation.v1` record binds an immutable artifact hash to independent ground
+truth, task-appropriate metrics, reviewer approval, and operator-defined acceptance
+criteria. RRG computes those criteria itself; a claimed `passed` string is ignored.
+Binary classification requires ROC AUC or a complete confusion matrix, multiclass a
+square matrix with labels, continuous outcomes both error and association metrics,
+and ordinal outcomes MAE plus Spearman correlation. Packaging fails when a required
+evaluation is missing, malformed, or below its declared threshold.
 
 ### Eval-lite
 
@@ -234,6 +294,16 @@ contract, reports breach status, and shows grading progress:
 rrg eval --run operator/robustness_GPT-5.5
 rrg eval --run R --json    # machine-readable
 ```
+
+### Deterministic comparison policy
+
+Scorecards and the Review UI call the same extraction/comparison engine. Canonical
+metrics are joined by question, metric id, and JSON path; units are normalized before
+comparison. Non-p-value metrics are exact-only: a reported `8.1` against `8.2` is a
+visible difference, never rounded away. P-values alone use a pipeline-owned absolute
+band of `0.005`; a non-exact p-value inside that band is still labeled
+`WITHIN_TOLERANCE`, with its delta shown. Validators cannot set or widen tolerance.
+Legacy text extraction is used only when canonical metric records do not exist.
 
 ### Origin intake
 
@@ -303,6 +373,6 @@ rrg gui --workspace /path/to/workspace --open   # multi-project mode
 
 ```bash
 pip install -e '.[dev]'
-pytest                    # 155 tests
+pytest                    # 253 tests collected as of 2026-09-02
 python -m build
 ```

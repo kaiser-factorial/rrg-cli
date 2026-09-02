@@ -6,11 +6,11 @@ finding the project tree, reading other studies' protocols, and writing its outp
 into the published package directory. Convention is not isolation.
 
 This module wraps a validator command so the operating system denies it the project
-tree. On macOS it uses ``sandbox-exec`` with a deny-list profile: every file read or
-write under the project root and the enclosing git checkout fails with "Operation not
-permitted", for the agent and every child process it spawns. Everything else (the
-agent's own config, its Python, the temp work dir) is untouched. Other platforms get no
-wrapper yet; the project-tree write detector in ``dispatch`` still catches escapes there.
+tree. On macOS it uses ``sandbox-exec`` to deny project/checkout reads and writes and,
+when the host can apply profiles, to confine writes to an explicit allow-list for the
+run workspace and required session state. The profile is inherited by child processes.
+Other platforms get no wrapper yet; the project-tree write detector in ``dispatch``
+still catches escapes there.
 
 Configuration (``rrg.yaml``)::
 
@@ -18,6 +18,8 @@ Configuration (``rrg.yaml``)::
       sandbox: auto        # auto (default) | off
       sandbox_deny:        # extra absolute paths to deny, on top of the defaults
         - /Users/me/other-studies
+      sandbox_write_allow: # exceptional write roots; keep this list narrow
+        - /Users/me/.cache/required-runtime
 """
 
 from __future__ import annotations

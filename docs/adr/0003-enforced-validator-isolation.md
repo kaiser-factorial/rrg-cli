@@ -24,10 +24,15 @@ Blinding cannot depend on the validator choosing to stay where it was put.
 ## Decision
 
 1. **OS sandbox.** Every validator command (and every figure script the executable gate
-   runs) is wrapped with `sandbox-exec` on macOS, denying `file-read*` and `file-write*`
-   under the project root, the enclosing git checkout, and any `dispatch.sandbox_deny`
-   extras. Hermes and its shell inherit the denial. Other platforms have no wrapper yet
-   and rely on (2). `dispatch.sandbox: off` disables it. `src/rrg_cli/sandbox.py`.
+   runs) is wrapped with `sandbox-exec` on macOS. Reads and writes are denied under the
+   project root, enclosing checkout, and any `dispatch.sandbox_deny` extras. Writes are
+   additionally denied everywhere except the run workspace, `/dev`, the selected
+   validator's session-state directory, and configured `dispatch.sandbox_write_allow`
+   roots. RRG probes whether the host can actually apply a profile; a binary merely
+   existing on `PATH` is not treated as enforcement. The run record exposes
+   `writable_roots` and `write_enforced`. Hermes and its children inherit the profile.
+   Unsupported or restricted hosts rely on (2). `dispatch.sandbox: off` disables it.
+   `src/rrg_cli/sandbox.py`.
 2. **Write detection and quarantine.** The git checkout is stat-snapshotted before and
    after the validator runs. Any new, modified, or removed file is an *isolation breach*:
    recorded on the run's breach record as `wrote_inside_project` and **blocking**
@@ -47,6 +52,9 @@ Blinding cannot depend on the validator choosing to stay where it was put.
   `RUN_INFO.md`, `rrg eval`) and cannot be graded silently.
 - Sandboxed validators cannot use Spotlight or `find` to locate the project; the
   inventory removes the reason to try.
+- Validator state directories are explicit but still broader than a per-run home. A
+  future backend should isolate `HOME` and copy back only the session token needed for
+  bounded revision turns.
 - Package directories cannot be edited in place; tests that simulate tampering chmod first.
 - Linux/Windows still lack an OS wrapper: detection is the only enforcement there.
   Candidates: `bwrap`, `firejail`, or a container. Tracked as follow-up work.

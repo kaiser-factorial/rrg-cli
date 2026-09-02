@@ -1,9 +1,9 @@
 # RRG — Research-validation pipeline specification
 
-RRG builds, blinds, and grades staged multi-model validation packages for a piece of
-research. The premise: to know whether a result is trustworthy, hand the underlying
-data and a fixed set of questions to independent models under controlled information
-conditions, then compare what they produce against the held-back original. RRG is the
+RRG builds, blinds, dispatches, and supports human grading of staged multi-model
+validation packages for a piece of research. The premise: to know whether a result is
+trustworthy, hand the underlying data and a fixed set of questions to independent models
+under controlled information conditions, then compare what they produce against the held-back original. RRG is the
 machinery that prepares those hand-offs correctly, proves nothing leaked, and lays the
 findings side by side for a human grader.
 
@@ -85,22 +85,27 @@ my-study/
     QUESTIONS.md                model-facing question text
     VALIDATION_INSTRUCTIONS.md  held constants
     ANALYSIS_PROTOCOL_OG.md     original methodology (routed only into replication)
+    METRIC_SPEC.json            ids/paths/types/units only; never origin values
   prompts/
     replication.md robustness.md generalization.md
   operator/                     operator-only side; never sent wholesale
     origin/                     the results key
       ORIGIN_REPORT.pdf         the held-back report
       SUMMARY.md                per-question transcription used by the scorecard
+      origin.json               canonical operator-only metric values
     OG_METHODOLOGY_PROMPT.md    prompt template for drafting the methodology
     private/                    anything else withheld
-    _packages/                  published packages + provenance_log.jsonl
-    _compare_notes/             operator review notes
-    SCORECARD_*.md              generated grading scaffolds
+    packages/                   published packages + provenance_log.jsonl
+    runs/<stage>/               authoritative returned runs
+    reviews/                    notes + generated scorecards
+    grading/                    operator grading state
+    archive/                    reversible archive
 ```
 
-Paths are configurable via `rrg.yaml > paths` (`shared`, `data`, `operator`,
-`packages`, `compare_notes`). Everything is resolved through a confinement helper that
-refuses paths escaping the project root.
+Paths are configurable via `rrg.yaml > paths` (`shared`, `data`, `operator`, `runs`,
+`packages`, `reviews`, `grading`, `archive`, `compare_notes`). Existing projects that
+omit the new keys retain their legacy paths. Everything is resolved through confinement
+helpers that refuse paths escaping the project root.
 
 ---
 
@@ -162,25 +167,30 @@ The cartridge may be wrapped in a top-level `study:` key or flat. Fields:
 6. **`rrg package --stage … --model …`** assembles the package in staging, lints it
    against the blinding rules, and publishes only if the lint passes (or `--force`,
    recorded). Provenance is written per package and appended to a log.
-7. **Dispatch** the delivery zip to the validator and run it **outside the project** so
-   the operator's secrets are unreachable; **`rrg import`** brings its returned outputs
-   back into `operator/<run>/`.
-8. **Review** returned runs (GUI *Runs*), compare validator vs. origin figures per
+7. **Dispatch** the delivery zip to the validator outside the project. Supported local
+   harnesses use an OS sandbox where available. Deterministic structure/metric/unit/
+   arithmetic/DYFA gates inspect the actual writable root and can issue bounded revision
+   turns without revealing origin values.
+8. **`rrg import`** validates and stages the complete untrusted return, gates manual
+   returns, then atomically installs it into the one provenance-selected run folder.
+9. **Review** returned runs (GUI *Runs*), compare validator vs. origin figures per
    question (*Compare*), and record notes.
-9. **`rrg scorecard`** generates a provisional, versioned per-question grading scaffold
+10. **`rrg scorecard`** generates a provisional, versioned per-question grading scaffold
    for a human to complete. The engine never assigns a final verdict.
 
 ---
 
 ## 6. CLI reference
 
-All commands accept `--root`, `--config`, `--study` to locate the project, and most
-accept `--json`. Exit code `0` = success, `2` = a checked condition failed (not
-ready / not verified / blocked / lint failed), `1` = error.
+All project commands accept `--root` or `--project`, plus `--config` and `--study`; most
+accept `--json`. Exit code `0` = success, `2` = readiness/blinding failure, `3` =
+returned artifacts imported for audit but deterministic gates failed, `1` = error.
 
 - **`rrg init [path] [--force]`** — create a project from the template.
-- **`rrg doctor [--stage S]`** — health inspection (missing deps and inputs are
+- **`rrg doctor|status [--stage S]`** — health inspection (missing deps and inputs are
   warnings).
+- **`rrg workspace [PATH]`** — find RRG projects below a workspace.
+- **`rrg paths`** — print resolved operator-side paths.
 - **`rrg preflight [--stage S]`** — strict readiness; missing inputs and deps are
   errors. Exit `2` if not ready.
 - **`rrg convert [source] [--out] [--formats csv parquet] [--labeled] [--na-token T]
@@ -191,11 +201,13 @@ ready / not verified / blocked / lint failed), `1` = error.
   `--force` publishes despite lint failure (recorded as `forced_override`);
   `--allow-unlisted` permits a model not in the roster. Exit `2` if blocked.
 - **`rrg lint <package> --stage S`** — lint an existing package directory.
-- **`rrg import <returned> --stage S --model M [--label L]`** — import a validator's
-  returned outputs (a folder or `.zip`) into its run folder, with zip-slip protection.
-- **`rrg prompt --stage S --model M [--mode discuss|nodiscuss] [--turn N]
+- **`rrg dispatch|validate --stage S --model M --validator V`** — build, run, gate,
+  revise within the configured bound, and optionally import/normalize.
+- **`rrg import <returned> --stage S --model M [--label L]`** — transactionally stage,
+  gate, and import a validator folder or `.zip` into its authoritative run folder.
+- **`rrg prompt --stage S --model M [--mode discuss|nodiscuss|agent] [--turn N]
   [--include-reminders]`** — render a stage prompt (or a single turn).
-- **`rrg scorecard --run R --stage S --model M [--key] [--map] [--out-dir]
+- **`rrg scorecard|review --run R --stage S --model M [--key] [--map] [--out-dir]
   [--license]`** — generate a provisional scorecard.
 - **`rrg gui [--workspace DIR] [--port 8765] [--open]`** — launch the local GUI. With
   `--workspace`, enable safe switching among projects beneath that directory.
@@ -232,7 +244,7 @@ A package **passes** when there are no hard fails. Flags are surfaced but do not
 **Provenance.** On publish, each package gets a `_provenance.json` (files sent, per-file
 SHA-256, the prompt file's path and hash, the blinding result and flags, determinism
 settings, any forced override, the output folder, and timestamp). The same record is
-appended to `operator/_packages/provenance_log.jsonl`, which the GUI reads to mark
+appended to the configured packages root's `provenance_log.jsonl`, which the GUI reads to mark
 which runs were dispatched.
 
 **Isolation (lint guards contents; isolation guards reach).** The lint controls what is
@@ -243,12 +255,33 @@ traverse to them (`ls ../../../origin/`). So on publish, RRG also writes a
 self-contained delivery **zip** (`<package_dir>.zip`, package files only, no
 `_provenance.json`). The validator must run on that zip in an environment **separate
 from the project** — ideally a container — where the secrets are not reachable. Its
-returned outputs come back via `rrg import`, which copies a returned folder or zip into
-`operator/<run>/` and rejects any entry that resolves outside the run folder (zip-slip
-protection). RRG deliberately does **not** add "don't snoop" instructions to the prompt;
-it removes access rather than asking. See `docs/adr/0001-validator-isolation.md`.
+returned outputs come back via `rrg import`. Import validates every archive path before
+writing, rejects traversal, duplicates/case collisions and symlinks, gates the staged
+deliverable root, and atomically installs into an empty provenance-selected run folder.
+Automated dispatch imports only new/changed validator files. See ADRs 0001, 0003, and
+0004.
 
 ---
+
+## 7.1 Scientific and semantic pre-publication gates
+
+Before publication, `packager` also enforces two optional scientific prerequisites:
+
+- A configured robustness `rrg.analysis-contract.v1` must be operator-approved,
+  result-neutral, and complete for population, unit of analysis, inclusion/exclusion,
+  time window, constructs/outcomes, and missingness. It must require independent method
+  selection. A normalizer audit blocks a selected table with detected derived or
+  answer-bearing columns.
+- Every required `study.yaml > derived_models` record must point to a valid
+  `rrg.model-evaluation.v1`: immutable artifact hash, independent ground truth,
+  task-appropriate metrics, reviewer approval, and operator thresholds. RRG evaluates
+  the thresholds itself.
+
+The validator-facing metric contract drives pre-import semantic gates. Each declared
+value must exist at its path with the right type/nullability and an exact `_units`
+entry; undeclared numeric fields fail. Safe declared sum/difference identities are
+checked with decimal exactness. DYFA F/A machine markers must equal the summary JSON.
+Gate feedback contains no origin values or comparison deltas.
 
 ## 8. Dataset conversion and verification
 
@@ -321,6 +354,14 @@ is rejected if it ever contains a final verdict — the engine never grades. Whe
 operator finalizes a fully-graded run (Review & Grade), the same builder fills the table
 with the human-confirmed verdicts and writes the next version. Grading state lives
 separately as per-run JSON; a run is "graded" only when every question is confirmed.
+
+Scorecard generation and GUI Review call the same `extract.question_extraction` engine.
+When `shared/METRIC_SPEC.json` and `operator/origin/origin.json` are populated, values
+join deterministically by question, metric id, and JSON path, with unit normalization
+and an explicit delta. Non-p-value metrics are exact-only. P-values alone receive the
+pipeline-owned absolute band `0.005`; a close non-exact value is labeled
+`WITHIN_TOLERANCE`, never exact. The validator cannot choose tolerance. Free-text
+number matching is a legacy fallback only when canonical records are absent.
 
 ---
 

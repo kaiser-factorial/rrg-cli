@@ -57,7 +57,8 @@ Exit code: `0` = pass, `2` = a checked condition failed (blocked). `rrg package
 ## Output
 
 - **PASS** — `rrg package` proceeds to publish; the lint result + flags are written into
-  `_provenance.json` and appended to `operator/_packages/provenance_log.jsonl`.
+  `_provenance.json` and appended to the configured packages root's
+  `provenance_log.jsonl`.
 - **HARD FAIL** — publication blocked; the offending files/rules are listed. Fix and
   re-run (or `--force` with logged justification).
 - **FLAGS** — listed for human confirmation; each is a false positive or gets removed.
@@ -71,12 +72,12 @@ the project could simply traverse to them (`ls ../../../origin/`). So the safety
 has two layers:
 
 - **Lint** (this skill) certifies the package's *contents* are clean.
-- **Isolation** (ADR-0001): on publish, `rrg package` also writes a self-contained
-  delivery **zip** (package files only, no `_provenance.json`). The validator must run on
-  that zip in an environment **separate from the project** — ideally a container — where
-  the secrets are unreachable. Returned outputs come back via `rrg import`, which rejects
-  any entry resolving outside the run folder (zip-slip protection). RRG removes access
-  rather than asking the model not to snoop.
+- **Isolation** (ADRs 0001 and 0003): on publish, `rrg package` writes a self-contained,
+  read-only delivery zip. Supported macOS dispatches deny project reads/writes and
+  confine writes to explicit roots; other hosts rely on escape detection until they
+  gain an enforcing backend. Returned output is fully validated in staging before
+  `rrg import` atomically installs it (ADR 0004). RRG removes access rather than asking
+  the model not to snoop.
 
 ## Important limits (necessary, not sufficient)
 

@@ -1,9 +1,11 @@
 """Import a validator's returned outputs back into its operator-side run folder.
 
 Validators run in isolation (see docs/adr/0001-validator-isolation.md) and hand back a
-folder or zip. This brings those outputs into ``operator/<output_folder>/`` for review.
-The returned archive is untrusted, so every entry is verified to resolve inside the run
-folder (zip-slip / path-traversal protection).
+folder or zip. The provenance record selects one authoritative operator-side run folder.
+The returned archive is
+untrusted, so it is completely validated and staged outside the project before the
+actual deliverable root is gated and atomically installed (including zip-slip,
+collision, and symlink protection).
 """
 
 from __future__ import annotations

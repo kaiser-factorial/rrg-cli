@@ -1,9 +1,10 @@
 """Reversible deletion: archive → restore → purge (ADR 0002).
 
-Every "delete" in RRG *moves* its target into ``operator/_archive/`` and records it in
-``operator/_archive/index.jsonl`` instead of unlinking. The archive is the only place that
-hard-deletes (purge); restore reverses the recorded move. ``_archive/`` is operator-only — it
-is never packaged and is skipped by the runs view (``_``-prefixed).
+Every "delete" in RRG *moves* its target into the configured operator archive root and
+records it in ``index.jsonl`` instead of unlinking. The archive is the only place that
+hard-deletes (purge); restore reverses the recorded move. Existing projects without an
+explicit archive path retain ``operator/_archive``. The archive is operator-only and
+never appears in packages or run discovery.
 """
 
 from __future__ import annotations

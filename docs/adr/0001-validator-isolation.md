@@ -1,9 +1,13 @@
 # ADR 0001 — Isolate validators from operator secrets via zip delivery + import
 
-- **Status:** Accepted
+- **Status:** Accepted historically; enforcement/import mechanics superseded by ADRs 0003 and 0004
 - **Date:** 2026-06-23
 
 ## Context
+
+> Path names and import behavior below describe the 2026-06-23 design. New projects
+> use explicit `operator/packages` and `operator/runs` roots; imports are now staged,
+> gated, and atomic. See ADRs 0003 and 0004.
 
 RRG's purpose is to blind validators from the original methodology and results so their
 work is independent. Until now, blinding was enforced **only at the package-content
