@@ -324,7 +324,7 @@ def _print_dispatch_result(result: dict[str, Any]) -> None:
                             border_style=WARN))
         return
 
-    console.print(f"  {OK} Run ID: [{GOLD}]{pkg.get('run_id', '\u2014')}[/]")
+    console.print(f"  {OK} Run ID: [{GOLD}]{pkg.get('run_id', '—')}[/]")
 
     if result.get("zip_path") and Path(result["zip_path"]).exists():
         console.print(f"  {OK} Package zip: {result['zip_path']}")

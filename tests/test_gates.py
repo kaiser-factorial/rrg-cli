@@ -505,7 +505,8 @@ def test_advisory_only_still_earns_a_revision_but_passes(ready_project: Project)
     side_effect, calls = _soft_only_validator(fix_on_feedback=False)
     with patch("rrg_cli.dispatch._exec_hermes_turn", side_effect=side_effect):
         result = dispatch(ready_project, "replication", "ReplicationModel",
-                          validator="hermes", mode="nodiscuss", gate_revisions=3)
+                          validator="hermes", mode="nodiscuss", gate_revisions=3,
+                          gate_exec=False)
     gates = result["gates"]
     assert gates["history"][0]["ok"] is True and gates["history"][0]["clean"] is False
     # One revision was sent for the advisory items ...
@@ -521,7 +522,7 @@ def test_advisory_fixed_on_revision_ends_clean(ready_project: Project) -> None:
     side_effect, calls = _soft_only_validator(fix_on_feedback=True)
     with patch("rrg_cli.dispatch._exec_hermes_turn", side_effect=side_effect):
         result = dispatch(ready_project, "replication", "ReplicationModel",
-                          validator="hermes", mode="nodiscuss")
+                          validator="hermes", mode="nodiscuss", gate_exec=False)
     gates = result["gates"]
     assert gates["revisions"] == 1 and gates["clean"] is True and gates["stopped"] is None
 

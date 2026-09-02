@@ -745,11 +745,11 @@ def _print_dispatch_result(result):
     pkg = result["package"]
     model_prov = result.get("model_provenance", "")
     model_str = f" [{model_prov}]" if model_prov else ""
-    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['validator']} executor{model_str}")
+    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['validator']} validator{model_str}")
     if pkg.get("blocked"):
         print("  \u2717 Package blocked by blinding lint")
         return
-    print(f"  Run ID: {pkg.get('run_id', '\u2014')}")
+    print(f"  Run ID: {pkg.get('run_id', '—')}")
     if result.get("zip_path") and Path(result["zip_path"]).exists():
         print(f"  Package zip: {result['zip_path']}")
     prompt = result.get("prompt")

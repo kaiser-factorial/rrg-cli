@@ -74,11 +74,11 @@
 - Extraction/metric/Review overlap after remote sync: `19 passed`.
 - Final focused hardening suite: `103 passed`.
 - All six touched RRG skills pass the Codex skill `quick_validate.py` check.
-- Final non-loopback suite: `242 passed, 2 skipped` (244 selected).
-- The nine HTTP/API tests requiring loopback binds were run outside the managed network
-  sandbox and passed: `9 passed`.
-- Test collection contains 253 tests: `251 passed, 2 skipped` across the split final
-  run. Re-run the non-loopback suite and the
+- Final unrestricted local suite after the cross-version CI repairs: `252 passed,
+  1 skipped` from 253 collected tests.
+- Python 3.9 and 3.11 compile checks cover the CLI/TUI syntax that Python 3.13 accepts
+  more permissively; the 46 affected CLI/TUI/gate tests pass locally.
+- Re-run the full suite and the
   nine loopback tests after any code change touching dispatch, import, GUI service,
   grading, intake, or origin APIs.
 
