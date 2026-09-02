@@ -310,14 +310,14 @@ async function loadOverview(){
   const body=data.rows.map(row=>{
     const cells=row.cells.map(cell=>{
       if(!cell.has_stats)return`<td class="mtx-cell mut clickable" data-run="${esc(cell.run)}" data-q="${row.new}" title="No Q${row.new}_summary.json — open to compare narratives">—</td>`;
-      const dot=cell.in_origin?'ok':'no';
-      const tip=cell.in_origin?`Matches origin (${esc(cell.origin_value)})`:'Not found in origin';
+      const dot=cell.exact?'ok':(cell.within_tolerance?'warn':'no');
+      const tip=cell.exact?`Exact match (${esc(cell.origin_value)})`:(cell.within_tolerance?`Within tolerance, not exact (${esc(cell.origin_value)})`:'Different or not found in origin');
       const key=cell.label?esc(cell.label.split('.').pop())+'=':'';
       return`<td class="mtx-cell clickable" data-run="${esc(cell.run)}" data-q="${row.new}" title="${tip}"><span class="dot ${dot}"></span><code>${key}${esc(cell.value||'—')}</code></td>`;
     }).join('');
     return`<tr><td>${row.new}</td><td class="mut">${esc(row.topic)}</td><td class="v-origin"><code>${esc(row.origin_value||'—')}</code></td>${cells}<td class="mut">${esc(row.agreement)}</td></tr>`;
   }).join('');
-  target.innerHTML=`<p class="mut">Headline statistic per run (top-level p-value where present). <span class="dot ok"></span> found in origin · <span class="dot no"></span> not in origin. Click any cell to open that question side-by-side below.</p><div class="mtx-scroll"><table class="mtx">${head}${body}</table></div>`;
+  target.innerHTML=`<p class="mut">Headline statistic per run (top-level p-value where present). <span class="dot ok"></span> exact · <span class="dot warn"></span> within tolerance, flagged · <span class="dot no"></span> different or unpaired. Click any cell to open that question side-by-side below.</p><div class="mtx-scroll"><table class="mtx">${head}${body}</table></div>`;
   target.querySelectorAll('.mtx-cell.clickable').forEach(td=>td.onclick=()=>{selectedQuestion=Number(td.dataset.q);loadReviewRun(td.dataset.run);const body=document.getElementById('review-body');if(body)body.scrollIntoView({behavior:'smooth',block:'start'})});
 }
 async function loadReviewRun(run){
@@ -343,10 +343,11 @@ async function loadReviewQuestion(question){
   const figures=items=>(items||[]).map(item=>`<figure id="fig-${figStem(item.name)}"><img src="${item.data_url}" alt="${esc(item.name)}"><figcaption class="mut">${esc(item.name)}</figcaption></figure>`).join('')||'<div class="empty">No figures.</div>';
   const legend=(result.legend||[]).map(verdict=>`<option value="${esc(verdict)}"${result.verdict===verdict?' selected':''}>${esc(verdict)}</option>`).join('');
   const stageNote=result.expect_exact?banner('warn','Replication stage — the validator should reproduce the origin’s statistics, so treat any “— not reported” as a discrepancy to check.'):banner('ok','Robustness stage — the validator chose its own method, so different or missing statistics can be legitimate. Lean on the narratives.');
-  const originCell=stat=>stat.in_origin?`<code class="${originClass}">${esc(stat.origin_value)}</code>${stat.origin_context?`<div class="mut ctx">${esc(stat.origin_context)}</div>`:''}`:'<span class="mut">— not reported</span>';
-  const statRows=(result.stats||[]).map(stat=>`<tr><td>${esc(stat.label)}</td><td><code class="${valClass}">${esc(stat.value)}</code></td><td>${originCell(stat)}</td></tr>`).join('');
-  const statsCaption='<p class="mut">The origin value is the validator’s number located in the origin’s text for this question (in the origin’s own representation — e.g. a percentage), with the surrounding snippet. “— not reported” means that exact number isn’t in the origin.</p>';
-  const statsBody=result.has_validator_stats?`${statsCaption}<table><thead><tr><th>Statistic</th><th class="${valClass}">Validator value</th><th class="${originClass}">Origin value</th></tr></thead><tbody>${statRows}</tbody></table>`:`<div class="empty">No machine-readable Q${result.question.new}_summary.json from this validator — compare via the narratives below.</div>`;
+  const statusPill=stat=>stat.status==='exact'?'<span class="pill ok">exact</span>':(stat.status==='within_tolerance'?'<span class="pill warn">within tolerance · flagged</span>':(stat.status==='different'?'<span class="pill bad">different</span>':'<span class="pill">validator-only</span>'));
+  const originCell=stat=>stat.origin_value?`<code class="${originClass}">${esc(stat.origin_value)}</code>${stat.origin_context?`<div class="mut ctx">${esc(stat.origin_context)}</div>`:''}`:'<span class="mut">— not paired</span>';
+  const statRows=(result.stats||[]).map(stat=>`<tr><td>${esc(stat.label)}</td><td><code class="${valClass}">${esc(stat.value)}</code></td><td>${originCell(stat)}</td><td><code>${esc(stat.delta_display||'—')}</code></td><td><code>${esc(stat.tolerance)}</code></td><td>${statusPill(stat)}</td></tr>`).join('');
+  const statsCaption='<p class="mut">Fields are compared under pipeline-owned policy: exact by default; recognized p-values use an absolute 0.005 band. Within-tolerance values remain flagged and never count as exact. Validator output cannot set or widen tolerance.</p>';
+  const statsBody=result.has_validator_stats?`${statsCaption}<table><thead><tr><th>Statistic</th><th class="${valClass}">Validator value</th><th class="${originClass}">Origin value</th><th>Delta</th><th>Tolerance</th><th>Status</th></tr></thead><tbody>${statRows}</tbody></table>`:`<div class="empty">No machine-readable Q${result.question.new}_summary.json from this validator — compare via the narratives below.</div>`;
   const onlyRows=(result.origin_only||[]).map(item=>`<tr><td><code class="${originClass}">${esc(item.value)}</code></td><td class="mut">${esc(item.context)}</td></tr>`).join('');
   const onlyBody=onlyRows?`<p class="mut">Numbers in the origin’s material for this question that don’t match any value the validator reported — the origin may have measured more.</p><table><thead><tr><th>Origin value</th><th>Context</th></tr></thead><tbody>${onlyRows}</tbody></table>`:'<div class="empty">None — every origin figure for this question matched a validator value.</div>';
   const narrative=(title,source,text,cls,marks)=>`<section><h4 class="${cls}">${esc(title)}${source?` <span class="mut">· ${esc(source)}</span>`:''}</h4>${text&&text.trim()?`<div class="md">${highlightStats(md(text),marks,cls)}</div>`:'<div class="empty">No report section for this question.</div>'}</section>`;

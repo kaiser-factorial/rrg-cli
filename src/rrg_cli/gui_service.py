@@ -483,12 +483,16 @@ class GUIState:
                     "label": stat["label"] if stat else "",
                     "value": stat["value"] if stat else "",
                     "in_origin": bool(stat["in_origin"]) if stat else False,
+                    "exact": bool(stat.get("exact")) if stat else False,
+                    "within_tolerance": bool(stat.get("within_tolerance")) if stat else False,
+                    "status": stat.get("status", "") if stat else "",
                     "origin_value": stat["origin_value"] if stat else "",
                 }
-                if cell["in_origin"] and cell["origin_value"] and not origin_value:
+                if cell["exact"] and cell["origin_value"] and not origin_value:
                     origin_value = cell["origin_value"]
                 cells.append(cell)
-            matched = sum(1 for cell in cells if cell["in_origin"])
+            matched = sum(1 for cell in cells if cell["exact"])
+            within = sum(1 for cell in cells if cell["within_tolerance"])
             with_stats = sum(1 for cell in cells if cell["has_stats"])
             rows.append(
                 {
@@ -497,7 +501,10 @@ class GUIState:
                     "topic": question["topic"],
                     "origin_value": origin_value,
                     "cells": cells,
-                    "agreement": f"{matched}/{with_stats}" if with_stats else "—",
+                    "agreement": (
+                        f"{matched}/{with_stats} exact" + (f", {within} within tolerance" if within else "")
+                        if with_stats else "—"
+                    ),
                 }
             )
         return {"questions": [{"new": q["new"], "topic": q["topic"]} for q in questions], "runs": run_cols, "rows": rows}

@@ -176,7 +176,7 @@ def _returned_run(project: Project) -> None:
     raw = project.root / "operator/replication_ModelX/raw"
     raw.mkdir(parents=True, exist_ok=True)
     (raw / "Q1_summary.json").write_text(json.dumps({"p_value": 0.5}), encoding="utf-8")
-    (raw / "Q2_summary.json").write_text(json.dumps({"p_value": 0.42}), encoding="utf-8")
+    (raw / "Q2_summary.json").write_text(json.dumps({"r": 0.42}), encoding="utf-8")
     # Q3 deliberately has no summary.json.
 
 
@@ -189,17 +189,17 @@ def test_cross_run_overview_matrix(tmp_path: Path):
     rows = {row["new"]: row for row in overview["rows"]}
     assert len(rows) == 3
 
-    # Q2's p-value (0.42) appears in the origin summary -> match.
+    # Q2's correlation (0.42) appears in the origin summary -> exact match.
     q2 = rows[2]["cells"][0]
     assert q2["has_stats"] and q2["in_origin"] and q2["value"] == "0.42"
     assert q2["origin_value"] == "0.42"
     assert rows[2]["origin_value"] == "0.42"
-    assert rows[2]["agreement"] == "1/1"
+    assert rows[2]["agreement"] == "1/1 exact"
 
     # Q1's value is not present in the origin -> no match.
     q1 = rows[1]["cells"][0]
     assert q1["has_stats"] and q1["in_origin"] is False and q1["value"] == "0.5"
-    assert rows[1]["agreement"] == "0/1"
+    assert rows[1]["agreement"] == "0/1 exact"
 
     # Q3 has no machine-readable stats.
     assert rows[3]["cells"][0]["has_stats"] is False

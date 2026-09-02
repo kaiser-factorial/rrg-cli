@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 import pytest
 import yaml
 
+from rrg_cli import extract as extract_module
 from rrg_cli.gui import make_handler, status
 from rrg_cli.gui_service import GUIState
 from rrg_cli.project import Project
@@ -33,6 +34,38 @@ def test_scorecard_is_provisional_and_versioned(ready_project):
     assert first["final_verdicts"] == 0
     assert text.count("**PENDING**") == 3
     assert "Held-back finding" in text
+    assert "## Deterministic comparisons" in text
+    assert "Validator field | Validator value | Origin value | Delta | Tolerance | Status" in text
+
+
+def test_scorecard_and_review_ui_share_one_comparison_engine(ready_project, monkeypatch):
+    run = ready_project.root / "operator/robustness_TestModel"
+    raw = run / "raw"
+    raw.mkdir(parents=True)
+    key = ready_project.root / "operator/origin"
+    for question in range(1, 4):
+        (raw / f"Q{question}_summary.json").write_text(
+            json.dumps({"estimate": question / 10}), encoding="utf-8"
+        )
+        (key / f"Q{question}.md").write_text(
+            f"## Q{question}\n- **statistic** — estimate {question / 10}", encoding="utf-8"
+        )
+
+    calls: list[tuple[str, int, int, str]] = []
+    shared_engine = extract_module.question_extraction
+
+    def observed(project, run_value, question_new, question_original, stage=""):
+        calls.append((run_value, question_new, question_original, stage))
+        return shared_engine(project, run_value, question_new, question_original, stage=stage)
+
+    monkeypatch.setattr(extract_module, "question_extraction", observed)
+    build_scorecard(ready_project, run, "robustness", "TestModel")
+    scorecard_calls = list(calls)
+    comparison = GUIState(ready_project).compare("operator/robustness_TestModel", 1)
+
+    assert len(scorecard_calls) == 3
+    assert calls[-1] == ("operator/robustness_TestModel", 1, 1, "robustness")
+    assert comparison["stats"][0]["status"] == "exact"
 
 
 def test_question_map_accepts_current_and_legacy_keys(tmp_path: Path):
