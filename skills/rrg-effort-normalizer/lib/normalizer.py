@@ -933,7 +933,7 @@ def _generate_study_yaml(
             "limitations and record boundaries", "method and validation sources",
             "shared-interview sensitivity",
         }
-        question_headings = [h for h in headings 
+        question_headings = [h for h in headings
                              if h.startswith("## ") and not h.startswith("### ")
                              and h.lstrip("# ").strip().lower() not in SKIP_SECTIONS]
         if question_headings:
@@ -1064,7 +1064,7 @@ def _generate_questions_map(manifest: dict, results_csv_info: dict | None) -> st
         "limitations and record boundaries", "method and validation sources",
         "shared-interview sensitivity",
     }
-    question_headings = [h.lstrip("# ").strip() for h in headings 
+    question_headings = [h.lstrip("# ").strip() for h in headings
                          if h.startswith("## ") and not h.startswith("### ")
                          and h.lstrip("# ").strip().lower() not in SKIP_SECTIONS]
 
@@ -1803,7 +1803,7 @@ def _generate_stub_summary(manifest: dict, project_name: str) -> str:
         "limitations and record boundaries", "method and validation sources",
         "shared-interview sensitivity",
     }
-    question_headings = [h.lstrip("# ").strip() for h in headings 
+    question_headings = [h.lstrip("# ").strip() for h in headings
                          if h.startswith("## ") and not h.startswith("### ")
                          and h.lstrip("# ").strip().lower() not in SKIP_SECTIONS]
 
