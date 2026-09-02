@@ -35,20 +35,25 @@ def flatten(value: Any, prefix: str = "") -> list[tuple[str, Any]]:
 
 
 def _number_forms(number: float) -> list[str]:
-    forms: set[str] = set()
+    # Build an ordered list, not a set: ``sorted`` is stable, so equal-length forms keep
+    # this insertion order (plain decimal, then comma-grouped, then percent). With a set
+    # the tie order would follow PYTHONHASHSEED and ``find_value`` could report a
+    # different ``matched_form`` from one run to the next.
+    forms: list[str] = []
     if number == int(number) and abs(number) < 1e15:
         integer = int(number)
-        forms.add(str(integer))
-        forms.add(f"{integer:,}")
+        forms.append(str(integer))
+        forms.append(f"{integer:,}")
     for decimals in (0, 1, 2, 3, 4):
-        forms.add(f"{number:.{decimals}f}")
-        forms.add(f"{number:,.{decimals}f}")
+        forms.append(f"{number:.{decimals}f}")
+        forms.append(f"{number:,.{decimals}f}")
     if abs(number) <= 1.5:  # percentage forms only make sense for proportions
         percent = number * 100
         for decimals in (0, 1, 2):
-            forms.add(f"{percent:.{decimals}f}")
+            forms.append(f"{percent:.{decimals}f}")
     # Drop forms that are too short to be meaningful on their own (e.g. "0").
-    return sorted((form for form in forms if len(form.lstrip("-")) >= 2), key=len, reverse=True)
+    unique = dict.fromkeys(form for form in forms if len(form.lstrip("-")) >= 2)
+    return sorted(unique, key=len, reverse=True)
 
 
 def _context(text: str, index: int, length: int) -> str:
@@ -201,9 +206,13 @@ def question_extraction(
 
     extra = origin_only(origin_text, values)
     validator_highlights = _highlight_forms(values)
-    origin_marks: set[str] = {row["origin_value"] for row in stats if row["origin_value"]}
-    origin_marks.update(item["value"].rstrip("%") for item in extra)
-    origin_highlights = sorted((mark for mark in origin_marks if len(mark) >= 2), key=len, reverse=True)
+    # Ordered dedupe (stats order, then origin-only order) so equal-length marks keep a
+    # fixed order instead of set iteration order.
+    origin_marks = [row["origin_value"] for row in stats if row["origin_value"]]
+    origin_marks.extend(item["value"].rstrip("%") for item in extra)
+    origin_highlights = sorted(
+        (mark for mark in dict.fromkeys(origin_marks) if len(mark) >= 2), key=len, reverse=True
+    )
 
     deliverable = project.study.get("deliverable", {}) or {}
     report_template = str(deliverable.get("report_name", ""))
@@ -227,12 +236,12 @@ def question_extraction(
 
 
 def _highlight_forms(values: list[Any]) -> list[str]:
-    forms: set[str] = set()
+    forms: list[str] = []  # ordered, deduped below, so tie order is deterministic
     for value in values:
         try:
-            forms.update(_number_forms(float(value)))
+            forms.extend(_number_forms(float(value)))
         except (TypeError, ValueError):
             text = str(value).strip()
             if len(text) >= 3:
-                forms.add(text)
-    return sorted((form for form in forms if len(form) >= 2), key=len, reverse=True)
+                forms.append(text)
+    return sorted((form for form in dict.fromkeys(forms) if len(form) >= 2), key=len, reverse=True)

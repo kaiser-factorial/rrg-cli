@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from rrg_cli import extract
@@ -16,6 +19,40 @@ def test_flatten_and_value_matching():
     assert extract.find_value(12.34, "only r = 0.44 reported")[0] is False
     assert extract._format_value(1815.722742556713) == "1815.7227"
     assert extract._format_value(3003.0) == "3,003"
+
+
+def test_number_forms_and_matching_are_order_stable():
+    # Equal-length forms keep a fixed precedence (plain decimal, then comma-grouped, then
+    # percent) rather than set iteration order, so the origin rendering that find_value
+    # reports does not depend on PYTHONHASHSEED.
+    assert extract._number_forms(0.25) == ["0.2500", "0.250", "25.00", "0.25", "25.0", "0.2", "25"]
+    assert extract.find_value(0.25, "share 25.0 of 0.25 total")[1] == "0.25"
+    assert extract._highlight_forms([0.44, 100]) == [
+        "100.0000", "100.000", "0.4400", "100.00", "0.440", "44.00", "100.0", "0.44", "44.0", "0.4", "100", "44",
+    ]
+
+
+def test_extraction_helpers_do_not_depend_on_hash_seed():
+    # Regression guard for run-to-run drift: the same inputs must produce byte-identical
+    # results in fresh interpreters started with different hash seeds.
+    code = (
+        "import json\n"
+        "from rrg_cli import extract\n"
+        "print(json.dumps({\n"
+        "    'forms': extract._number_forms(0.25),\n"
+        "    'matched': extract.find_value(0.25, 'share 25.0 of 0.25 total'),\n"
+        "    'highlights': extract._highlight_forms([0.44, 100, 0.5, 'chi2']),\n"
+        "}))\n"
+    )
+    src_dir = str(Path(extract.__file__).resolve().parents[1])
+    outputs = set()
+    for seed in ("0", "1", "2", "3"):
+        env = {**os.environ, "PYTHONHASHSEED": seed, "PYTHONPATH": src_dir}
+        completed = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, env=env, check=True
+        )
+        outputs.add(completed.stdout.strip())
+    assert len(outputs) == 1, outputs
 
 
 def test_origin_only_surfaces_unreported_numbers():
