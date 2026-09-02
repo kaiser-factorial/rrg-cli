@@ -12,6 +12,7 @@ from .blinding import lint_package
 from .analysis_contract import assert_stage_analysis_contract
 from .errors import RRGError
 from .importer import RUN_MARKER_NAME, render_run_marker
+from .layout import packages_root, run_destination
 from .metrics import load_public_metric_specs, public_metric_spec_path
 from .model_eval import assert_model_evaluations
 from .project import Project
@@ -84,11 +85,9 @@ def build_package(
         # answer values, tolerances, or method hints never belong in them.
         load_public_metric_specs(project)
     inputs = resolve_send(project, stage_id)
-    package_root = project.path_setting("packages", "operator/_packages")
+    package_root = packages_root(project)
     destination = _unique_destination(package_root / stage_id / run_slug)
-    operator_root = project.path_setting("operator", "operator")
-    output_template = str(stage.get("output_folder", f"{stage_id}_{{model}}"))
-    output_folder = operator_root / output_template.format(model=run_slug, MODEL=run_slug)
+    output_folder = run_destination(project, stage_id, run_label, run_id)
     report_template = str(stage.get("report_name", "{model}_Report.docx"))
     report_name = report_template.format(model=run_label, MODEL=run_label)
 
@@ -117,6 +116,8 @@ def build_package(
             "forced_override": bool(not lint.passed and force),
             "determinism": project.config.get("constraints", {}).get("determinism", {}),
             "output_folder": str(output_folder),
+            "output_path": str(output_folder.relative_to(project.root)),
+            "deliverable_folder": prompt.output_folder,
             "report_name": report_name,
             "package_dir": str(destination),
         }

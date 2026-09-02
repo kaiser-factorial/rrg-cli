@@ -756,7 +756,8 @@ def _reuse_package(project: Project, stage: str, model: str, label: str | None) 
         if run.get("stage") == stage and model.lower() in str(run.get("model", "")).lower():
             run_id = run.get("run_id")
             if run_id:
-                pkg_root = project.path_setting("packages", "operator/_packages")
+                from .layout import packages_root
+                pkg_root = packages_root(project)
                 for pkg_dir in sorted(pkg_root.rglob(f"*{run_id}*"), reverse=True):
                     if pkg_dir.is_dir():
                         zip_path = Path(str(pkg_dir) + ".zip")
@@ -765,7 +766,7 @@ def _reuse_package(project: Project, stage: str, model: str, label: str | None) 
                             "run_id": run_id,
                             "package_dir": str(pkg_dir),
                             "package_zip": str(zip_path) if zip_path.exists() else None,
-                            "output_folder": str(project.path_setting("operator", "operator") / f"{stage}_{safe_label(model)}__{run_id}"),
+                            "output_folder": str(project.path(str(run.get("path") or ""))),
                             "report_name": None,
                             "lint": {"passed": True, "hard_fails": [], "flags": []},
                             "provenance": {},
@@ -892,6 +893,7 @@ def dispatch(
     conversation: list[dict[str, Any]] = []
     instructions = ""
     collected_dir: Path | None = None
+    collected_baseline: dict[str, tuple[int, int]] | None = None
     gate_result: dict[str, Any] = {"enabled": False, "reason": "gates disabled"}
     gate_spec: dict[str, Any] | None = None
     sandbox: dict[str, Any] | None = None
@@ -936,6 +938,7 @@ def dispatch(
             marker = collected_dir / "RRG_RUN.txt"
             if marker.exists():
                 marker.unlink()
+        collected_baseline = _snapshot_tree(collected_dir)
 
         # Enforced isolation: OS sandbox where available, write detection everywhere.
         sandbox = make_sandbox(project, collected_dir, validator=validator)
@@ -960,14 +963,20 @@ def dispatch(
     # Step 4: Import
     import_result: dict[str, Any] | None = None
     if auto_import and collected_dir is not None:
-        has_files = any(p.is_file() for p in collected_dir.rglob("*"))
+        from .gates import locate_deliverable_root
+        delivered_root = locate_deliverable_root(collected_dir, rendered.output_folder)
+        include_files: set[str] | None = None
+        if delivered_root == collected_dir and collected_baseline is not None:
+            after_collection = _snapshot_tree(collected_dir)
+            include_files = {
+                path for path, fingerprint in after_collection.items()
+                if path not in collected_baseline or collected_baseline[path] != fingerprint
+            }
+        has_files = (
+            any(p.is_file() for p in delivered_root.rglob("*"))
+            if include_files is None else bool(include_files)
+        )
         if has_files:
-            # Restore RRG_RUN.txt marker for auto-resolve
-            if run_id:
-                marker = collected_dir / "RRG_RUN.txt"
-                if not marker.exists():
-                    from .importer import render_run_marker
-                    marker.write_text(render_run_marker(run_id))
             # Extract model provenance — prefer model detected from JSON output, fall back to config
             detected_model = None
             if conversation:
@@ -978,12 +987,14 @@ def dispatch(
             model_name = detected_model or _get_model_provenance(validator, slug if validator in SLUG_VALIDATORS else "")
 
             import_result = import_run(
-                project, stage, model, collected_dir,
+                project, stage, model, delivered_root,
                 run_id=run_id, normalize=not skip_normalize,
                 validator=validator, model_provenance=model_name,
                 gates=gate_result if gate_result.get("enabled") else None,
                 wrote_inside_project=(escapes or {}).get("breaches") or [],
                 sandbox=sandbox,
+                include_files=include_files,
+                output_folder=rendered.output_folder,
             )
         shutil.rmtree(collected_dir, ignore_errors=True)
 

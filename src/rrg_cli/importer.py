@@ -9,14 +9,17 @@ folder (zip-slip / path-traversal protection).
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any
 
 from . import grading as grading_module
 from .errors import RRGError
+from .layout import operator_root, packages_root, provenance_run_path, run_destination
 from .project import Project
 from .utils import safe_label, sha256
 
@@ -69,7 +72,7 @@ def read_run_marker(source: Path) -> str | None:
 
 def lookup_provenance(project: Project, run_id: str) -> dict[str, Any] | None:
     """Return the most recent provenance-log record whose run_id matches, or None."""
-    log_path = project.path_setting("packages", "operator/_packages") / "provenance_log.jsonl"
+    log_path = packages_root(project) / "provenance_log.jsonl"
     if not log_path.is_file():
         return None
     found: dict[str, Any] | None = None
@@ -124,12 +127,11 @@ def run_output_folder(
 
     When no run_id is given, resolves the newest matching folder.
     """
-    stage = project.stage(stage_id)
-    operator_root = project.path_setting("operator", "operator")
+    project.stage(stage_id)
+    root = run_destination(project, stage_id, run_label, run_id).parent
 
     if run_id:
-        name = _run_folder_name(stage_id, run_label, run_id, validator, model_provenance)
-        return operator_root / name
+        return run_destination(project, stage_id, run_label, run_id)
     # No run_id — try to find an existing folder
     if validator and model_provenance:
         # Search by prefix pattern (date varies)
@@ -139,16 +141,20 @@ def run_output_folder(
         prefix = f"{stage_id}_{validator}_{model_slug}_"
     else:
         prefix = f"{stage_id}_{run_label}"
-    if operator_root.is_dir():
-        matches = sorted(operator_root.glob(f"{prefix}*__*"), key=lambda path: path.stat().st_mtime)
+    if root.is_dir():
+        # Structured layouts already scope the directory by stage. Legacy layouts keep
+        # the stage in the folder name.
+        if root.resolve() != operator_root(project).resolve():
+            prefix = run_label
+        matches = sorted(root.glob(f"{prefix}*__*"), key=lambda path: path.stat().st_mtime)
         if matches:
             return matches[-1]
         # Also try legacy naming
         legacy = f"{stage_id}_{run_label}"
-        matches = sorted(operator_root.glob(f"{legacy}__*"), key=lambda path: path.stat().st_mtime)
+        matches = sorted(root.glob(f"{legacy}__*"), key=lambda path: path.stat().st_mtime)
         if matches:
             return matches[-1]
-    return operator_root / f"{stage_id}_{run_label}"
+    return run_destination(project, stage_id, run_label, None)
 
 
 def _withheld_hashes(project: Project, stage_id: str) -> dict[str, str]:
@@ -215,13 +221,80 @@ def detect_breach(
     return {"copied_secrets": copied, "ran_inside_project": ran_inside}
 
 
-def _safe_target(destination: Path, member: str) -> Path:
-    target = (destination / member).resolve()
+def _safe_target(destination: Path, member: str, *, label: str = "run folder") -> Path:
+    base = destination.resolve()
+    target = (base / member).resolve()
     try:
-        target.relative_to(destination)
+        target.relative_to(base)
     except ValueError as exc:  # zip-slip / traversal
-        raise RRGError(f"refusing entry outside the run folder: {member}") from exc
+        raise RRGError(f"refusing entry outside the {label}: {member}") from exc
     return target
+
+
+def _stage_return(source: Path, staging: Path, include_files: set[str] | None = None) -> list[str]:
+    """Validate and copy an untrusted return into an isolated temporary tree."""
+    copied: list[str] = []
+    if source.is_file() and source.suffix.lower() == ".zip":
+        try:
+            with zipfile.ZipFile(source) as bundle:
+                members = [name for name in bundle.namelist() if not name.endswith("/")]
+                folded = [str(Path(name)).casefold() for name in members]
+                if len(folded) != len(set(folded)):
+                    raise RRGError("returned zip contains duplicate or case-colliding paths")
+                # Validate the complete archive before writing a single member.
+                targets = [(name, _safe_target(staging, name, label="staging folder")) for name in members]
+                for member, target in targets:
+                    if include_files is not None and member not in include_files:
+                        continue
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with bundle.open(member) as src, open(target, "wb") as out:
+                        shutil.copyfileobj(src, out)
+                    copied.append(str(target.relative_to(staging.resolve())))
+        except zipfile.BadZipFile as exc:
+            raise RRGError(f"returned output is not a readable zip: {source}") from exc
+    elif source.is_dir():
+        candidates = [path for path in sorted(source.rglob("*")) if path.is_file() and path.name != ".DS_Store"]
+        targets: list[tuple[Path, str, Path]] = []
+        for path in candidates:
+            if path.is_symlink():
+                raise RRGError(f"returned folder contains a symbolic link: {path.relative_to(source)}")
+            relative = str(path.relative_to(source))
+            if include_files is not None and relative not in include_files:
+                continue
+            targets.append((path, relative, _safe_target(staging, relative, label="staging folder")))
+        for path, relative, target in targets:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, target)
+            copied.append(relative)
+    else:
+        raise RRGError("returned output must be a .zip file or a directory")
+    return copied
+
+
+def _return_root(staging: Path, output_folder: str | None = None) -> Path:
+    """Locate the deliverable tree and strip one transport-only wrapper directory."""
+    from .gates import locate_deliverable_root
+
+    root = locate_deliverable_root(staging, output_folder)
+    if root != staging:
+        return root
+    visible = [path for path in staging.iterdir() if path.name != RUN_MARKER_NAME and not path.name.startswith(".")]
+    directories = [path for path in visible if path.is_dir()]
+    files = [path for path in visible if path.is_file()]
+    if len(directories) == 1 and not files:
+        return directories[0]
+    return staging
+
+
+def _logged_destination(project: Project, record: dict[str, Any]) -> Path | None:
+    candidate = provenance_run_path(project, record)
+    if candidate is None:
+        return None
+    try:
+        candidate.relative_to(operator_root(project).resolve())
+    except ValueError as exc:
+        raise RRGError("logged run destination is outside the operator root") from exc
+    return candidate
 
 
 def _write_run_info(
@@ -305,6 +378,8 @@ def import_run(
     exec_gates: bool = False,
     wrote_inside_project: list[dict[str, str]] | None = None,
     sandbox: dict[str, Any] | None = None,
+    include_files: set[str] | None = None,
+    output_folder: str | None = None,
 ) -> dict[str, Any]:
     """Copy a returned folder/zip into its run folder, then check, normalize, and record.
 
@@ -346,34 +421,52 @@ def import_run(
     project.stage(stage_id)  # validate stage exists
     roster_entry = project.model(stage_id, model_query)
     run_label = label or safe_label(roster_entry.get("model") if roster_entry else model_query)
-    destination = run_output_folder(
-        project, stage_id, run_label, run_id,
-        validator=validator, model_provenance=model_provenance,
+    destination = (
+        _logged_destination(project, record) if record else None
+    ) or run_output_folder(
+        project, stage_id, run_label, run_id, validator=validator,
+        model_provenance=model_provenance,
     ).resolve()
 
-    destination.mkdir(parents=True, exist_ok=True)
-    imported: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="rrg_import_") as temporary:
+        staging = Path(temporary) / "return"
+        staging.mkdir()
+        _stage_return(source, staging, include_files)
+        deliverable = _return_root(staging, output_folder or (record or {}).get("deliverable_folder"))
 
-    if source.is_file() and source.suffix.lower() == ".zip":
-        with zipfile.ZipFile(source) as bundle:
-            for member in bundle.namelist():
-                if member.endswith("/"):
-                    continue
-                target = _safe_target(destination, member)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with bundle.open(member) as src, open(target, "wb") as out:
-                    shutil.copyfileobj(src, out)
-                imported.append(str(target.relative_to(destination)))
-    elif source.is_dir():
-        for path in sorted(source.rglob("*")):
-            if not path.is_file() or path.name == ".DS_Store":
-                continue
-            target = _safe_target(destination, str(path.relative_to(source)))
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(path, target)
-            imported.append(str(target.relative_to(destination)))
-    else:
-        raise RRGError("returned output must be a .zip file or a directory")
+        # Deliverable gates run on the actual isolated writable return before anything is
+        # copied into the operator tree. The public metric contract is safe to supply;
+        # origin values are never loaded here.
+        if gates is None:
+            from .gates import check_gates, gate_record, project_question_count, project_report_name
+            from .metrics import load_public_metric_specs
+            from .prefs import load_prefs
+            gate_python = str(load_prefs(project).get("gate_python", "") or "") or None
+            public_metrics = load_public_metric_specs(project, required=False) or None
+            gates = gate_record(
+                check_gates(
+                    deliverable, project_question_count(project),
+                    project_report_name(project, stage_id, roster_entry.get("model") if roster_entry else model_query),
+                    exec_figures=exec_gates, exec_python=gate_python,
+                    metric_contract=public_metrics,
+                ),
+                source="import",
+            )
+
+        staged_files = [path for path in sorted(deliverable.rglob("*")) if path.is_file() and path.name != ".DS_Store"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists() and any(destination.iterdir()):
+            raise RRGError(f"run folder already contains files; refusing to overwrite: {destination}")
+        candidate = Path(tempfile.mkdtemp(prefix=f".{destination.name}.importing-", dir=destination.parent))
+        try:
+            shutil.copytree(deliverable, candidate, copy_function=shutil.copyfile, dirs_exist_ok=True)
+            if destination.exists():
+                destination.rmdir()
+            os.replace(candidate, destination)
+        finally:
+            if candidate.exists():
+                shutil.rmtree(candidate)
+        imported = [str(path.relative_to(deliverable)) for path in staged_files]
 
     run_value = str(destination.relative_to(project.root))
     breach = detect_breach(project, stage_id, destination, source)
@@ -386,19 +479,6 @@ def import_run(
         wrote_inside_project=breach["wrote_inside_project"],
     )
 
-    # Deliverable gates on the files as returned (before normalization renames anything).
-    if gates is None:
-        from .gates import check_gates, gate_record, project_question_count, project_report_name
-        from .prefs import load_prefs
-        gate_python = str(load_prefs(project).get("gate_python", "") or "") or None
-        gates = gate_record(
-            check_gates(
-                destination, project_question_count(project),
-                project_report_name(project, stage_id, roster_entry.get("model") if roster_entry else model_query),
-                exec_figures=exec_gates, exec_python=gate_python,
-            ),
-            source="import",
-        )
     if sandbox is not None:
         gates = {**gates, "sandbox": {"mode": sandbox.get("mode"), "reason": sandbox.get("reason", "")}}
     (destination / "GATES.json").write_text(

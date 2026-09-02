@@ -1,7 +1,47 @@
 import json
 from pathlib import Path
 
-from rrg_cli.cli import main
+from rrg_cli.cli import build_parser, main
+
+
+def test_help_is_workflow_oriented_and_exposes_human_aliases():
+    help_text = build_parser().format_help()
+    assert "Typical workflow" in help_text
+    assert "validate" in help_text and "review" in help_text
+    dispatch_help = build_parser()._subparsers._group_actions[0].choices["dispatch"].format_help()
+    assert "--project" in dispatch_help
+    assert "--gate-revisions" in dispatch_help
+
+
+def test_workspace_command_and_project_alias_are_machine_readable(tmp_path: Path, capsys):
+    project = tmp_path / "workspace" / "study"
+    assert main(["init", str(project), "--json"]) == 0
+    capsys.readouterr()
+    assert main(["workspace", str(tmp_path / "workspace"), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["projects"][0]["root"] == "study"
+    assert main(["status", "--project", str(project), "--json"]) == 2
+    assert json.loads(capsys.readouterr().out)["project"] == "starter-validation"
+    assert main(["paths", "--project", str(project), "--json"]) == 0
+    paths = json.loads(capsys.readouterr().out)["paths"]
+    assert paths["runs"] == "operator/runs"
+    assert paths["packages"] == "operator/packages"
+
+
+def test_import_exits_nonzero_when_deterministic_gates_fail(tmp_path: Path, capsys):
+    root = tmp_path / "project"
+    returned = tmp_path / "returned"
+    assert main(["init", str(root), "--json"]) == 0
+    capsys.readouterr()
+    returned.mkdir()
+    (returned / "SUMMARY.md").write_text("incomplete")
+    code = main([
+        "import", "--project", str(root), str(returned),
+        "--stage", "replication", "--model", "ReplicationModel", "--json",
+    ])
+    assert code == 3
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["gates"]["passed"] is False
 
 
 def test_cli_end_to_end(tmp_path: Path, capsys):

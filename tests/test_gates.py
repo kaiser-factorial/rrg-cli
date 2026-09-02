@@ -537,6 +537,8 @@ def test_openrouter_has_nothing_to_gate(ready_project: Project) -> None:
 
 def test_import_records_gates_before_normalizing(ready_project: Project, tmp_path: Path) -> None:
     returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "METRIC_SPEC.json").write_text(ready_project.path("shared/METRIC_SPEC.json").read_text())
     _write_conforming(returned, 3)
     (returned / "Q1_fig.png").rename(returned / "q1_figure.png")
     result = import_run(ready_project, "replication", "ReplicationModel", returned)
@@ -552,6 +554,8 @@ def test_import_records_gates_before_normalizing(ready_project: Project, tmp_pat
 def test_eval_surfaces_gate_record(ready_project: Project, tmp_path: Path) -> None:
     from rrg_cli.eval_lite import eval_run
     returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "METRIC_SPEC.json").write_text(ready_project.path("shared/METRIC_SPEC.json").read_text())
     _write_conforming(returned, 3)
     result = import_run(ready_project, "replication", "ReplicationModel", returned)
     evaluated = eval_run(ready_project, Path(result["output_folder"]))

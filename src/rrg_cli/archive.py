@@ -18,12 +18,9 @@ from pathlib import Path
 from typing import Any
 
 from .errors import RRGError
+from .layout import archive_root
 from .project import Project
 from .utils import remove_tree
-
-
-def archive_root(project: Project) -> Path:
-    return project.path_setting("operator", "operator") / "_archive"
 
 
 def _index_path(project: Project) -> Path:

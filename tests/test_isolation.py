@@ -17,6 +17,7 @@ from rrg_cli import grading
 from rrg_cli.dispatch import _exec_hermes_turn, _parse_hermes_output, dispatch
 from rrg_cli.errors import RRGError
 from rrg_cli.packager import build_package
+from rrg_cli.layout import packages_root
 from rrg_cli.project import Project
 from rrg_cli.sandbox import build_profile, deny_paths, make_sandbox, sandbox_exec_available, wrap
 
@@ -136,7 +137,7 @@ def test_first_turn_carries_working_directory_and_inventory(ready_project: Proje
 # --- write detection + quarantine -------------------------------------------------------
 
 def _package_dir(project: Project) -> Path:
-    dirs = [p for p in project.path("operator/_packages/replication").iterdir() if p.is_dir()]
+    dirs = [p for p in (packages_root(project) / "replication").iterdir() if p.is_dir()]
     return sorted(dirs, key=lambda p: p.stat().st_mtime)[-1]
 
 

@@ -18,7 +18,7 @@ from .project import Project
 from .prompts import render_prompt
 from .scaffold import init_project
 from .scorecard import build_scorecard
-from .workspace import initial_workspace_project
+from .workspace import discover_project_roots, initial_workspace_project
 
 
 def _emit(value: Any, as_json: bool) -> None:
@@ -39,9 +39,12 @@ def _project(args) -> Project:
 
 
 def _add_project_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--root")
-    parser.add_argument("--config", default="rrg.yaml")
-    parser.add_argument("--study", default="study.yaml")
+    parser.add_argument(
+        "--root", "--project", dest="root", metavar="PATH",
+        help="RRG project directory (default: discover upward from the current directory)",
+    )
+    parser.add_argument("--config", default="rrg.yaml", metavar="FILE", help="project config filename")
+    parser.add_argument("--study", default="study.yaml", metavar="FILE", help="study cartridge filename")
 
 
 def _checks_human(report: dict[str, Any]) -> str:
@@ -54,7 +57,20 @@ def _checks_human(report: dict[str, Any]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="rrg", description="RRG research-validation pipeline")
+    parser = argparse.ArgumentParser(
+        prog="rrg",
+        description="RRG research-validation pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Typical workflow:
+  rrg status --project PATH
+  rrg package --project PATH --stage replication --model MODEL
+  rrg validate --project PATH --stage replication --model MODEL --validator hermes
+  rrg import --project PATH RETURN.zip        # stage/model resolve from RRG_RUN.txt
+  rrg review --project PATH --run RUN --stage replication --model MODEL
+
+For stable machine output, add --json. Run `rrg COMMAND --help` for command details.
+""",
+    )
     parser.add_argument("--version", action="version", version=f"rrg-cli {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -63,8 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true")
     init.add_argument("--json", action="store_true")
 
-    for name, help_text in (("doctor", "inspect project health"), ("preflight", "run strict readiness checks")):
-        command = sub.add_parser(name, help=help_text)
+    for name, help_text, aliases in (
+        ("doctor", "inspect project health", ["status"]),
+        ("preflight", "run strict readiness checks", []),
+    ):
+        command = sub.add_parser(name, aliases=aliases, help=help_text)
         _add_project_args(command)
         command.add_argument("--stage")
         command.add_argument("--json", action="store_true")
@@ -137,16 +156,22 @@ def build_parser() -> argparse.ArgumentParser:
     _add_project_args(runs_cmd)
     runs_cmd.add_argument("--json", action="store_true")
 
+    paths_cmd = sub.add_parser("paths", help="show resolved operator workspace paths")
+    _add_project_args(paths_cmd)
+    paths_cmd.add_argument("--json", action="store_true")
+
     prompt = sub.add_parser("prompt", help="render a stage prompt")
     _add_project_args(prompt)
     prompt.add_argument("--stage", required=True)
     prompt.add_argument("--model", required=True)
-    prompt.add_argument("--mode", choices=["discuss", "nodiscuss"], default="discuss")
+    prompt.add_argument("--mode", choices=["discuss", "nodiscuss", "agent"], default="discuss")
     prompt.add_argument("--turn", type=int)
     prompt.add_argument("--include-reminders", action="store_true")
     prompt.add_argument("--json", action="store_true")
 
-    scorecard = sub.add_parser("scorecard", help="create a provisional human-grading scorecard")
+    scorecard = sub.add_parser(
+        "scorecard", aliases=["review"], help="create a provisional operator review scorecard"
+    )
     _add_project_args(scorecard)
     scorecard.add_argument("--run", required=True)
     scorecard.add_argument("--stage", required=True)
@@ -179,7 +204,10 @@ def build_parser() -> argparse.ArgumentParser:
     prefs_cmd.add_argument("--reset", action="store_true", help="reset preferences to defaults")
     prefs_cmd.add_argument("--json", action="store_true")
 
-    dispatch_cmd = sub.add_parser("dispatch", help="build, run, and import a validation package in one step")
+    dispatch_cmd = sub.add_parser(
+        "dispatch", aliases=["validate"],
+        help="build, run, gate, and import a validation package in one step",
+    )
     _add_project_args(dispatch_cmd)
     dispatch_cmd.add_argument("--stage", required=True)
     dispatch_cmd.add_argument("--model", required=True)
@@ -246,6 +274,10 @@ def build_parser() -> argparse.ArgumentParser:
     tui_cmd.add_argument("--prefs", action="store_true", help="interactive prefs editor")
     tui_cmd.add_argument("--eval", metavar="RUN", default=None, help="eval a run with rich output")
 
+    workspace_cmd = sub.add_parser("workspace", help="list RRG projects below a workspace directory")
+    workspace_cmd.add_argument("path", nargs="?", default=".", help="workspace directory (default: current directory)")
+    workspace_cmd.add_argument("--json", action="store_true")
+
     sub.add_parser("version", help="print the installed version")
     return parser
 
@@ -259,13 +291,34 @@ def run(args: argparse.Namespace) -> int:
         result = {"root": str(Path(args.path).resolve()), "created": [str(path) for path in created]}
         _emit(result if args.json else f"Created RRG project at {result['root']} ({len(created)} files)", args.json)
         return 0
+    if args.command == "workspace":
+        workspace = Path(args.path).expanduser().resolve()
+        projects = []
+        for root in discover_project_roots(workspace):
+            relative = root.relative_to(workspace)
+            root_label = "." if not relative.parts else str(relative)
+            try:
+                item = Project.load(root)
+                projects.append({"root": root_label, "path": str(root), "name": item.name, "valid": True})
+            except RRGError as exc:
+                projects.append({"root": root_label, "path": str(root), "name": root.name, "valid": False, "error": str(exc)})
+        if args.json:
+            _emit({"workspace": str(workspace), "projects": projects}, True)
+        elif not projects:
+            print(f"No RRG projects found below {workspace}")
+        else:
+            print(f"RRG workspace — {workspace}")
+            for item in projects:
+                mark = "✓" if item["valid"] else "✗"
+                print(f"  {mark} {item['root']:<32} {item['name']}")
+        return 0 if projects else 2
     if args.command == "gui" and args.workspace:
         workspace = Path(args.workspace).expanduser().resolve()
         project = initial_workspace_project(workspace, requested=args.root)
         serve(project, args.port, open_browser=args.open, workspace=str(workspace))
         return 0
     project = _project(args)
-    if args.command in {"doctor", "preflight"}:
+    if args.command in {"doctor", "status", "preflight"}:
         report = inspect_project(project, stage=args.stage, strict=args.command == "preflight")
         _emit(report if args.json else _checks_human(report), args.json)
         return 0 if report["ok"] else 2
@@ -303,6 +356,7 @@ def run(args: argparse.Namespace) -> int:
         )
         how = " (auto-resolved from RRG_RUN.txt)" if result.get("auto_resolved") else ""
         breach = result.get("breach") or {}
+        gates = result.get("gates") or {}
         if args.json:
             _emit(result, args.json)
         else:
@@ -319,14 +373,15 @@ def run(args: argparse.Namespace) -> int:
             elif breach.get("ran_inside_project"):
                 print("  ⚠ note: returned outputs came from inside the project tree; "
                       "isolation may have been skipped.")
-            gates = result.get("gates") or {}
             if gates.get("enabled"):
                 mark = "✓" if gates.get("passed") else "✗"
                 print(f"  {mark} Deliverable gates: {gates.get('summary', '')} (details in GATES.json)")
                 for violation in ((gates.get("final") or {}).get("hard") or [])[:8]:
                     q = f"Q{violation['question']} " if violation.get("question") else ""
                     print(f"      {q}[{violation['code']}] {violation['message']}")
-        return 3 if (breach.get("copied_secrets")) else 0
+        blocking_breach = bool(breach.get("copied_secrets") or breach.get("wrote_inside_project"))
+        gate_failed = bool(gates.get("enabled") and not gates.get("passed"))
+        return 3 if (blocking_breach or gate_failed) else 0
     if args.command == "acknowledge-breach":
         from . import grading as grading_module
 
@@ -348,6 +403,16 @@ def run(args: argparse.Namespace) -> int:
                     status += " ⚠BREACH"
                 run_id = row.get("run_id") or "—"
                 print(f"{row['stage']:<14} {row['model']:<22} {run_id:<10} {status:<18} {row['file_count']} files")
+        return 0
+    if args.command == "paths":
+        from .layout import layout_status
+        paths = layout_status(project)
+        if args.json:
+            _emit({"project": str(project.root), "paths": paths}, True)
+        else:
+            print(f"RRG paths — {project.root}")
+            for name, value in paths.items():
+                print(f"  {name:<10} {value}")
         return 0
     if args.command == "archive":
         from . import archive as archive_module
@@ -405,7 +470,7 @@ def run(args: argparse.Namespace) -> int:
         else:
             print(text, end="")
         return 0
-    if args.command == "scorecard":
+    if args.command in {"scorecard", "review"}:
         result = build_scorecard(
             project,
             project.path(args.run),
@@ -482,7 +547,7 @@ def run(args: argparse.Namespace) -> int:
             for key, value in prefs.items():
                 print(f"  {key}: {value}")
         return 0
-    if args.command == "dispatch":
+    if args.command in {"dispatch", "validate"}:
         from .dispatch import dispatch
         result = dispatch(
             project, args.stage, args.model,

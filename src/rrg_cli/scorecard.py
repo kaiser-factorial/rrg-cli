@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import RRGError
+from .layout import reviews_root
 from .project import Project
 from .utils import load_yaml, safe_label
 
@@ -107,7 +108,7 @@ def build_scorecard(
         raise RRGError(f"results key directory not found: {key_dir}")
     map_path = (map_path or project.path(project.study.get("questions", {}).get("map", "questions_map.yaml"))).resolve()
     questions = load_question_map(map_path)
-    output_dir = (output_dir or project.path_setting("operator", "operator")).resolve()
+    output_dir = (output_dir or reviews_root(project)).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     label = safe_label(model)
     version, prior = _next_version(output_dir, stage, label)

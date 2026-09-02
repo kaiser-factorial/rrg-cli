@@ -60,6 +60,15 @@ def test_legacy_manifest_normalization():
     assert "data-variation plan" in config["stages"][0]["blocked_reason"]
 
 
+def test_new_project_uses_named_operator_subdirectories(ready_project: Project):
+    paths = ready_project.config["paths"]
+    assert paths["runs"] == "operator/runs"
+    assert paths["packages"] == "operator/packages"
+    assert paths["reviews"] == "operator/reviews"
+    assert paths["grading"] == "operator/grading"
+    assert paths["archive"] == "operator/archive"
+
+
 def test_prompts_render_without_cartridge_leaks(ready_project: Project):
     replication = render_prompt(ready_project, "replication", "ReplicationModel")
     robustness = render_prompt(ready_project, "robustness", "RobustnessModel")

@@ -27,6 +27,7 @@ def test_package_mints_run_id_and_suffixes_names(ready_project):
     run_id = result["run_id"]
     assert run_id and len(run_id) == 8 and all(c in "0123456789abcdef" for c in run_id)
     assert result["provenance"]["run_id"] == run_id
+    assert result["provenance"]["output_path"] == str(Path(result["output_folder"]).relative_to(ready_project.root))
     # The run folder, package dir, and zip all carry the run_id suffix.
     assert result["output_folder"].endswith(f"__{run_id}")
     assert Path(result["package_dir"]).name.endswith(f"__{run_id}")
@@ -91,6 +92,25 @@ def test_import_auto_resolves_from_marker(ready_project, tmp_path: Path):
     assert result["stage"] == "robustness" and result["model"] == "RobustnessModel"
     assert result["run_id"] == built["run_id"]
     assert result["output_folder"] == built["output_folder"]
+
+
+def test_import_uses_the_logged_destination_even_with_runtime_provenance(ready_project, tmp_path: Path):
+    from rrg_cli.importer import render_run_marker
+
+    built = build_package(ready_project, "replication", "ReplicationModel")
+    returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "RRG_RUN.txt").write_text(render_run_marker(built["run_id"]))
+    (returned / "SUMMARY.md").write_text("## Q1\nok")
+
+    result = import_run(
+        ready_project, source=returned, validator="hermes", model_provenance="moonshot/kimi-k3",
+    )
+    assert result["output_folder"] == built["output_folder"]
+    # The build destination is the only run folder for this id.
+    assert len(list(ready_project.root.rglob(f"*{built['run_id']}*"))) >= 1
+    run_dirs = [path for path in ready_project.root.rglob(f"*{built['run_id']}*") if path.is_dir() and "packages" not in path.parts and "_packages" not in path.parts]
+    assert run_dirs == [Path(built["output_folder"])]
 
 
 def test_import_without_marker_requires_stage_and_model(ready_project, tmp_path: Path):
@@ -178,8 +198,40 @@ def test_import_rejects_zip_slip(ready_project, tmp_path: Path):
     evil = tmp_path / "evil.zip"
     with zipfile.ZipFile(evil, "w") as archive:
         archive.writestr("../../origin/STOLEN.md", "leak")
-    with pytest.raises(RRGError, match="outside the run folder"):
+    with pytest.raises(RRGError, match="outside the staging folder"):
         import_run(ready_project, "replication", "ReplicationModel", evil)
+
+
+def test_import_is_transactional_and_strips_one_deliverable_wrapper(ready_project, tmp_path: Path):
+    built = build_package(ready_project, "replication", "ReplicationModel")
+    bundle = tmp_path / "returned.zip"
+    with zipfile.ZipFile(bundle, "w") as archive:
+        archive.writestr("validator-output/Q1_analysis.py", "open('raw/Q1_raw.csv', 'w').write('x')")
+        archive.writestr("validator-output/SUMMARY.md", "## Q1\nok")
+        archive.writestr("../../escape.txt", "bad")
+    with pytest.raises(RRGError, match="outside the staging folder"):
+        import_run(ready_project, "replication", "ReplicationModel", bundle, run_id=built["run_id"])
+    assert not (Path(built["output_folder"]) / "SUMMARY.md").exists()
+
+    clean = tmp_path / "clean.zip"
+    with zipfile.ZipFile(clean, "w") as archive:
+        archive.writestr("validator-output/Q1_analysis.py", "open('raw/Q1_raw.csv', 'w').write('x')")
+        archive.writestr("validator-output/SUMMARY.md", "## Q1\nok")
+    result = import_run(ready_project, "replication", "ReplicationModel", clean, run_id=built["run_id"])
+    run = Path(result["output_folder"])
+    assert (run / "Q1_analysis.py").is_file()
+    assert (run / "SUMMARY.md").is_file()
+    assert not (run / "validator-output").exists()
+
+
+def test_import_rejects_symlinked_return_files(ready_project, tmp_path: Path):
+    outside = tmp_path / "outside.txt"
+    outside.write_text("not part of the return")
+    returned = tmp_path / "returned"
+    returned.mkdir()
+    (returned / "linked.txt").symlink_to(outside)
+    with pytest.raises(RRGError, match="symbolic link"):
+        import_run(ready_project, "replication", "ReplicationModel", returned)
 
 
 def test_gui_import_run(ready_project, tmp_path: Path):

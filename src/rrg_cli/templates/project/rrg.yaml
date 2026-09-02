@@ -6,8 +6,12 @@ paths:
   shared: shared
   data: data
   operator: operator
-  packages: operator/_packages
-  compare_notes: operator/_compare_notes
+  runs: operator/runs
+  packages: operator/packages
+  reviews: operator/reviews
+  grading: operator/grading
+  archive: operator/archive
+  compare_notes: operator/reviews/compare-notes
 
 origin:
   vendor: OriginVendor

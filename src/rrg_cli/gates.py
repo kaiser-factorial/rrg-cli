@@ -1010,6 +1010,7 @@ def check_gates(
     exec_total_timeout: int = EXEC_TOTAL_TIMEOUT,
     exec_prefix: list[str] | None = None,
     exec_deny: list[str] | None = None,
+    metric_contract: dict[str, Any] | None = None,
 ) -> GateResult:
     """Run every deliverable gate against a validator's output tree.
 
@@ -1026,7 +1027,7 @@ def check_gates(
         report_name=report_name,
     )
     out = result.violations
-    metric_contract = _load_public_metric_contract(work_dir, root)
+    metric_contract = metric_contract or _load_public_metric_contract(work_dir, root)
     if metric_contract and metric_contract.get("_invalid"):
         out.append(GateViolation(
             "INVALID_METRIC_SPEC", "validator-visible METRIC_SPEC.json is invalid",
