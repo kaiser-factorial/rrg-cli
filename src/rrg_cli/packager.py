@@ -9,9 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from .blinding import lint_package
+from .analysis_contract import assert_stage_analysis_contract
 from .errors import RRGError
 from .importer import RUN_MARKER_NAME, render_run_marker
 from .metrics import load_public_metric_specs, public_metric_spec_path
+from .model_eval import assert_model_evaluations
 from .project import Project
 from .prompts import render_prompt
 from .routing import RoutedInput, resolve_send
@@ -75,6 +77,8 @@ def build_package(
     # already disambiguates it.
     run_id = mint_run_id()
     run_slug = f"{run_label}__{run_id}"
+    assert_model_evaluations(project)
+    assert_stage_analysis_contract(project, stage_id)
     if public_metric_spec_path(project).is_file():
         # Validate before copying or dispatching. Public specs are executable contracts;
         # answer values, tolerances, or method hints never belong in them.

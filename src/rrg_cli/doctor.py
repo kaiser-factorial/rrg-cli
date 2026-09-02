@@ -8,6 +8,8 @@ from typing import Any
 
 from .project import Project
 from .metrics import load_origin_results, load_public_metric_specs
+from .model_eval import check_model_evaluations
+from .analysis_contract import analysis_contract_path, evaluate_analysis_contract, load_analysis_contract
 from .prompts import render_prompt
 from .routing import resolve_send
 from .utils import sha256
@@ -106,6 +108,36 @@ def inspect_project(project: Project, stage: str | None = None, strict: bool = F
                 checks.append(Check("ok" if verified else "error", "derivative verification", "all derivatives verified" if verified else "one or more derivatives did not verify", str(metadata_path)))
             except (OSError, json.JSONDecodeError) as exc:
                 checks.append(Check("error", "dataset metadata", f"unreadable: {exc}", str(metadata_path)))
+
+    for evaluation in check_model_evaluations(project):
+        checks.append(
+            Check(
+                "ok" if evaluation["passed"] else ("error" if strict else "warning"),
+                f"model evaluation:{evaluation['model_id']}",
+                evaluation["detail"],
+                evaluation.get("path"),
+            )
+        )
+
+    contract_path = analysis_contract_path(project)
+    if contract_path is not None:
+        try:
+            contract = load_analysis_contract(project) or {}
+            contract_result = evaluate_analysis_contract(contract)
+            checks.append(
+                Check(
+                    "ok" if contract_result["passed"] else ("error" if strict else "warning"),
+                    "robustness analysis contract",
+                    "approved and result-neutral"
+                    if contract_result["passed"]
+                    else "; ".join(contract_result["issues"]),
+                    str(contract_path),
+                )
+            )
+        except Exception as exc:
+            checks.append(
+                Check("error" if strict else "warning", "robustness analysis contract", str(exc), str(contract_path))
+            )
 
     stages = [stage] if stage else project.stage_ids()
     for stage_id in stages:
