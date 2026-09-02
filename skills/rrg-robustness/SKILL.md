@@ -29,6 +29,12 @@ validator executes it in isolation and the outputs return via `rrg import`.
 - **Methodology: HIDDEN.** `stages.robustness.methodology: hidden`. No methodology
   protocol may be in the package — `per_stage_methodology.robustness.forbid` lists the
   protocol patterns, and the lint hard-fails if any appear. The model must design its own.
+- **Design constants: FIXED WITHOUT RESULTS.** When configured, the approved
+  `rrg.analysis-contract.v1` fixes population, unit of analysis, inclusion/exclusion,
+  time window, constructs/outcomes, and missingness while requiring independent method
+  choice. It may not contain origin findings, expected values, or tolerance.
+- **Analysis input: RESULT-NEUTRAL.** Review the normalizer audit before packaging. A
+  selected table with detected derived or answer-bearing columns blocks the stage.
 - **Results: BLIND.** Origin/results key, `SCORECARD_*`, and operator-private files are
   withheld everywhere.
 - **Payload identical across models.** Do not tailor the prompt to the model.
@@ -68,7 +74,8 @@ per-question pipeline, the per-question raw summary the scorecard reads
 (`raw/Q<n>_summary.json`), the DYFA narrative, the report named per
 `stages.robustness.report_name`, and a `SUMMARY.md`. Each question reports N + subgroup
 Ns, descriptive inputs, test statistic + effect size + 95% CI, and a one-sentence
-conclusion.
+conclusion. Every public metric and `_units` entry must match `METRIC_SPEC.json`, and
+the DYFA F/A machine markers must match the summary.
 
 ## Grading
 

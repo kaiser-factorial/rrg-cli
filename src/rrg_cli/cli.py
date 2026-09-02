@@ -18,7 +18,7 @@ from .project import Project
 from .prompts import render_prompt
 from .scaffold import init_project
 from .scorecard import build_scorecard
-from .workspace import initial_workspace_project
+from .workspace import discover_project_roots, initial_workspace_project
 
 
 def _emit(value: Any, as_json: bool) -> None:
@@ -39,9 +39,12 @@ def _project(args) -> Project:
 
 
 def _add_project_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--root")
-    parser.add_argument("--config", default="rrg.yaml")
-    parser.add_argument("--study", default="study.yaml")
+    parser.add_argument(
+        "--root", "--project", dest="root", metavar="PATH",
+        help="RRG project directory (default: discover upward from the current directory)",
+    )
+    parser.add_argument("--config", default="rrg.yaml", metavar="FILE", help="project config filename")
+    parser.add_argument("--study", default="study.yaml", metavar="FILE", help="study cartridge filename")
 
 
 def _checks_human(report: dict[str, Any]) -> str:
@@ -54,7 +57,20 @@ def _checks_human(report: dict[str, Any]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="rrg", description="RRG research-validation pipeline")
+    parser = argparse.ArgumentParser(
+        prog="rrg",
+        description="RRG research-validation pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Typical workflow:
+  rrg status --project PATH
+  rrg package --project PATH --stage replication --model MODEL
+  rrg validate --project PATH --stage replication --model MODEL --validator hermes
+  rrg import --project PATH RETURN.zip        # stage/model resolve from RRG_RUN.txt
+  rrg review --project PATH --run RUN --stage replication --model MODEL
+
+For stable machine output, add --json. Run `rrg COMMAND --help` for command details.
+""",
+    )
     parser.add_argument("--version", action="version", version=f"rrg-cli {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -63,8 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true")
     init.add_argument("--json", action="store_true")
 
-    for name, help_text in (("doctor", "inspect project health"), ("preflight", "run strict readiness checks")):
-        command = sub.add_parser(name, help=help_text)
+    for name, help_text, aliases in (
+        ("doctor", "inspect project health", ["status"]),
+        ("preflight", "run strict readiness checks", []),
+    ):
+        command = sub.add_parser(name, aliases=aliases, help=help_text)
         _add_project_args(command)
         command.add_argument("--stage")
         command.add_argument("--json", action="store_true")
@@ -103,6 +122,8 @@ def build_parser() -> argparse.ArgumentParser:
     importer.add_argument("--label")
     importer.add_argument("--run-id", dest="run_id", help="target a specific build's run folder (ADR 0002)")
     importer.add_argument("--skip-normalize", action="store_true", help="skip auto-normalization of returned output")
+    importer.add_argument("--exec-gates", action="store_true",
+                          help="also execute each Q<n>_fig.py to verify it reproduces Q<n>_fig.png (runs validator code locally)")
     importer.add_argument("--json", action="store_true")
 
     ack = sub.add_parser(
@@ -135,16 +156,22 @@ def build_parser() -> argparse.ArgumentParser:
     _add_project_args(runs_cmd)
     runs_cmd.add_argument("--json", action="store_true")
 
+    paths_cmd = sub.add_parser("paths", help="show resolved operator workspace paths")
+    _add_project_args(paths_cmd)
+    paths_cmd.add_argument("--json", action="store_true")
+
     prompt = sub.add_parser("prompt", help="render a stage prompt")
     _add_project_args(prompt)
     prompt.add_argument("--stage", required=True)
     prompt.add_argument("--model", required=True)
-    prompt.add_argument("--mode", choices=["discuss", "nodiscuss"], default="discuss")
+    prompt.add_argument("--mode", choices=["discuss", "nodiscuss", "agent"], default="discuss")
     prompt.add_argument("--turn", type=int)
     prompt.add_argument("--include-reminders", action="store_true")
     prompt.add_argument("--json", action="store_true")
 
-    scorecard = sub.add_parser("scorecard", help="create a provisional human-grading scorecard")
+    scorecard = sub.add_parser(
+        "scorecard", aliases=["review"], help="create a provisional operator review scorecard"
+    )
     _add_project_args(scorecard)
     scorecard.add_argument("--run", required=True)
     scorecard.add_argument("--stage", required=True)
@@ -173,11 +200,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     prefs_cmd = sub.add_parser("prefs", help="view or set user preferences")
     _add_project_args(prefs_cmd)
-    prefs_cmd.add_argument("--set", metavar="KEY=VALUE", action="append", help="set a preference (e.g. --set executor=hermes)")
+    prefs_cmd.add_argument("--set", metavar="KEY=VALUE", action="append", help="set a preference (e.g. --set validator=hermes)")
     prefs_cmd.add_argument("--reset", action="store_true", help="reset preferences to defaults")
     prefs_cmd.add_argument("--json", action="store_true")
 
-    dispatch_cmd = sub.add_parser("dispatch", help="build, run, and import a validation package in one step")
+    dispatch_cmd = sub.add_parser(
+        "dispatch", aliases=["validate"],
+        help="build, run, gate, and import a validation package in one step",
+    )
     _add_project_args(dispatch_cmd)
     dispatch_cmd.add_argument("--stage", required=True)
     dispatch_cmd.add_argument("--model", required=True)
@@ -191,6 +221,15 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_cmd.add_argument("--skip-normalize", action="store_true")
     dispatch_cmd.add_argument("--no-auto-import", action="store_true")
     dispatch_cmd.add_argument("--force", action="store_true")
+    dispatch_cmd.add_argument("--no-gates", action="store_true",
+                              help="skip the gate/revision loop after the validator finishes "
+                                   "(import still records a one-shot GATES.json)")
+    dispatch_cmd.add_argument("--gate-revisions", type=int, default=None, metavar="N",
+                              help="revision turns a failing gate may trigger (default: from prefs, 1; 0 = report only)")
+    dispatch_cmd.add_argument("--no-exec-gates", action="store_true",
+                              help="do not execute Q<n>_fig.py scripts to verify they reproduce Q<n>_fig.png")
+    dispatch_cmd.add_argument("--gate-python", default=None, metavar="PYTHON",
+                              help="interpreter for executing figure scripts (default: from prefs, else auto-detect)")
     dispatch_cmd.add_argument("--json", action="store_true")
 
     wizard_cmd = sub.add_parser("wizard", help="interactive setup and dispatch walkthrough")
@@ -235,6 +274,10 @@ def build_parser() -> argparse.ArgumentParser:
     tui_cmd.add_argument("--prefs", action="store_true", help="interactive prefs editor")
     tui_cmd.add_argument("--eval", metavar="RUN", default=None, help="eval a run with rich output")
 
+    workspace_cmd = sub.add_parser("workspace", help="list RRG projects below a workspace directory")
+    workspace_cmd.add_argument("path", nargs="?", default=".", help="workspace directory (default: current directory)")
+    workspace_cmd.add_argument("--json", action="store_true")
+
     sub.add_parser("version", help="print the installed version")
     return parser
 
@@ -248,13 +291,34 @@ def run(args: argparse.Namespace) -> int:
         result = {"root": str(Path(args.path).resolve()), "created": [str(path) for path in created]}
         _emit(result if args.json else f"Created RRG project at {result['root']} ({len(created)} files)", args.json)
         return 0
+    if args.command == "workspace":
+        workspace = Path(args.path).expanduser().resolve()
+        projects = []
+        for root in discover_project_roots(workspace):
+            relative = root.relative_to(workspace)
+            root_label = "." if not relative.parts else str(relative)
+            try:
+                item = Project.load(root)
+                projects.append({"root": root_label, "path": str(root), "name": item.name, "valid": True})
+            except RRGError as exc:
+                projects.append({"root": root_label, "path": str(root), "name": root.name, "valid": False, "error": str(exc)})
+        if args.json:
+            _emit({"workspace": str(workspace), "projects": projects}, True)
+        elif not projects:
+            print(f"No RRG projects found below {workspace}")
+        else:
+            print(f"RRG workspace — {workspace}")
+            for item in projects:
+                mark = "✓" if item["valid"] else "✗"
+                print(f"  {mark} {item['root']:<32} {item['name']}")
+        return 0 if projects else 2
     if args.command == "gui" and args.workspace:
         workspace = Path(args.workspace).expanduser().resolve()
         project = initial_workspace_project(workspace, requested=args.root)
         serve(project, args.port, open_browser=args.open, workspace=str(workspace))
         return 0
     project = _project(args)
-    if args.command in {"doctor", "preflight"}:
+    if args.command in {"doctor", "status", "preflight"}:
         report = inspect_project(project, stage=args.stage, strict=args.command == "preflight")
         _emit(report if args.json else _checks_human(report), args.json)
         return 0 if report["ok"] else 2
@@ -288,10 +352,11 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "import":
         result = import_run(
             project, args.stage, args.model, args.source, label=args.label, run_id=args.run_id,
-            normalize=not args.skip_normalize,
+            normalize=not args.skip_normalize, exec_gates=args.exec_gates,
         )
         how = " (auto-resolved from RRG_RUN.txt)" if result.get("auto_resolved") else ""
         breach = result.get("breach") or {}
+        gates = result.get("gates") or {}
         if args.json:
             _emit(result, args.json)
         else:
@@ -308,7 +373,15 @@ def run(args: argparse.Namespace) -> int:
             elif breach.get("ran_inside_project"):
                 print("  ⚠ note: returned outputs came from inside the project tree; "
                       "isolation may have been skipped.")
-        return 3 if (breach.get("copied_secrets")) else 0
+            if gates.get("enabled"):
+                mark = "✓" if gates.get("passed") else "✗"
+                print(f"  {mark} Deliverable gates: {gates.get('summary', '')} (details in GATES.json)")
+                for violation in ((gates.get("final") or {}).get("hard") or [])[:8]:
+                    q = f"Q{violation['question']} " if violation.get("question") else ""
+                    print(f"      {q}[{violation['code']}] {violation['message']}")
+        blocking_breach = bool(breach.get("copied_secrets") or breach.get("wrote_inside_project"))
+        gate_failed = bool(gates.get("enabled") and not gates.get("passed"))
+        return 3 if (blocking_breach or gate_failed) else 0
     if args.command == "acknowledge-breach":
         from . import grading as grading_module
 
@@ -330,6 +403,16 @@ def run(args: argparse.Namespace) -> int:
                     status += " ⚠BREACH"
                 run_id = row.get("run_id") or "—"
                 print(f"{row['stage']:<14} {row['model']:<22} {run_id:<10} {status:<18} {row['file_count']} files")
+        return 0
+    if args.command == "paths":
+        from .layout import layout_status
+        paths = layout_status(project)
+        if args.json:
+            _emit({"project": str(project.root), "paths": paths}, True)
+        else:
+            print(f"RRG paths — {project.root}")
+            for name, value in paths.items():
+                print(f"  {name:<10} {value}")
         return 0
     if args.command == "archive":
         from . import archive as archive_module
@@ -387,7 +470,7 @@ def run(args: argparse.Namespace) -> int:
         else:
             print(text, end="")
         return 0
-    if args.command == "scorecard":
+    if args.command in {"scorecard", "review"}:
         result = build_scorecard(
             project,
             project.path(args.run),
@@ -447,8 +530,11 @@ def run(args: argparse.Namespace) -> int:
                     raise RRGError(f"invalid --set value (expected KEY=VALUE): {item}")
                 key, value = item.split("=", 1)
                 key = key.strip()
-                if key in ("skip_normalize", "auto_import"):
-                    value = value.lower() in ("true", "yes", "1")
+                from .prefs import coerce_pref
+                try:
+                    value = coerce_pref(key, value)
+                except ValueError as exc:
+                    raise RRGError(str(exc))
                 save_prefs(project, {key: value})
             prefs = load_prefs(project)
             _emit({"prefs": prefs}, args.json) if args.json else print("Saved.")
@@ -461,21 +547,30 @@ def run(args: argparse.Namespace) -> int:
             for key, value in prefs.items():
                 print(f"  {key}: {value}")
         return 0
-    if args.command == "dispatch":
+    if args.command in {"dispatch", "validate"}:
         from .dispatch import dispatch
         result = dispatch(
             project, args.stage, args.model,
-            executor=args.validator, mode=args.mode, label=args.label,
+            validator=args.validator, mode=args.mode, label=args.label,
             dry_run=args.dry_run, reuse=args.reuse,
             skip_normalize=args.skip_normalize or None,
             auto_import=None if not args.no_auto_import else False,
             force=args.force,
+            gates=False if args.no_gates else None,
+            gate_revisions=args.gate_revisions,
+            gate_exec=False if args.no_exec_gates else None,
+            gate_python=args.gate_python,
         )
         if args.json:
             _emit(result, True)
         else:
             _print_dispatch_result(result)
-        return 2 if result["package"].get("blocked") else 0
+        if result["package"].get("blocked"):
+            return 2
+        gates = result.get("gates") or {}
+        if gates.get("enabled") and not gates.get("passed"):
+            return 3
+        return 0
     if args.command == "wizard":
         from .wizard import run_wizard
         result = run_wizard(project, non_interactive=args.non_interactive,
@@ -650,11 +745,11 @@ def _print_dispatch_result(result):
     pkg = result["package"]
     model_prov = result.get("model_provenance", "")
     model_str = f" [{model_prov}]" if model_prov else ""
-    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['validator']} executor{model_str}")
+    print(f"RRG Dispatch \u2014 {result.get('mode', 'discuss')} mode, {result['validator']} validator{model_str}")
     if pkg.get("blocked"):
         print("  \u2717 Package blocked by blinding lint")
         return
-    print(f"  Run ID: {pkg.get('run_id', '\u2014')}")
+    print(f"  Run ID: {pkg.get('run_id', '—')}")
     if result.get("zip_path") and Path(result["zip_path"]).exists():
         print(f"  Package zip: {result['zip_path']}")
     prompt = result.get("prompt")
@@ -664,6 +759,35 @@ def _print_dispatch_result(result):
             print(f"    Turn {i} \u2014 {t['title']}")
     if result.get("conversation"):
         print(f"  Conversation: {len(result['conversation'])} exchange(s)")
+    sandbox = result.get("sandbox")
+    if sandbox is not None:
+        if sandbox.get("mode"):
+            print(f"  Sandbox: {sandbox['mode']} denying {len(sandbox.get('deny') or [])} path(s)")
+        else:
+            print(f"  ⚠ Sandbox: none ({sandbox.get('reason', '')})")
+    escapes = result.get("escapes") or {}
+    if escapes.get("breaches"):
+        print(f"  ✗ ISOLATION BREACH: validator changed {len(escapes['breaches'])} file(s) inside the project"
+              f" ({len(escapes.get('quarantined') or [])} quarantined into the run)")
+        for record in escapes["breaches"][:8]:
+            extra = f" → quarantined to {record['quarantined_to']}" if record.get("quarantined_to") else ""
+            print(f"      {record['change']}: {record['path']}{extra}")
+    if escapes.get("notes"):
+        print(f"  note: {len(escapes['notes'])} file(s) elsewhere in the checkout changed during the run"
+              " (not attributed to the validator; see escapes.notes in --json)")
+    gates = result.get("gates") or {}
+    if gates.get("enabled"):
+        mark = "✓" if gates.get("passed") else "✗"
+        print(f"  {mark} Deliverable gates: {gates.get('summary', '')} "
+              f"({gates.get('revisions', 0)}/{gates.get('max_revisions', 0)} revision(s) used, root `{gates.get('root', '.')}`)")
+        if gates.get("stopped"):
+            print(f"      note: {gates['stopped']}")
+        final = gates.get("final") or {}
+        for violation in (final.get("hard") or [])[:12]:
+            q = f"Q{violation['question']} " if violation.get("question") else ""
+            print(f"      {q}[{violation['code']}] {violation['message']}")
+        if len(final.get("hard") or []) > 12:
+            print(f"      … {len(final['hard']) - 12} more in GATES.json")
     if result.get("import_result"):
         imp = result["import_result"]
         print(f"  Imported: {imp['count']} files into {imp['run']}")

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import RRGError
+from .layout import reviews_root
 from .project import Project
 from .utils import load_yaml, safe_label
 
@@ -71,6 +72,12 @@ def _cell(value: str) -> str:
     return re.sub(r"\s+", " ", value).replace("|", "\\|").strip()
 
 
+def _comparison_cell(value: Any) -> str:
+    if value is None or value == "":
+        return "—"
+    return _cell(str(value))
+
+
 def _next_version(output: Path, stage: str, label: str) -> tuple[int, Path | None]:
     pattern = re.compile(rf"^SCORECARD_{re.escape(stage)}_{re.escape(label)}_v(\d+)\.md$")
     versions = sorted(
@@ -101,7 +108,7 @@ def build_scorecard(
         raise RRGError(f"results key directory not found: {key_dir}")
     map_path = (map_path or project.path(project.study.get("questions", {}).get("map", "questions_map.yaml"))).resolve()
     questions = load_question_map(map_path)
-    output_dir = (output_dir or project.path_setting("operator", "operator")).resolve()
+    output_dir = (output_dir or reviews_root(project)).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     label = safe_label(model)
     version, prior = _next_version(output_dir, stage, label)
@@ -126,23 +133,86 @@ def build_scorecard(
         "",
         "`REPRODUCED` · `CONVERGED` · `DIVERGED` · `INCOMPLETE` · `GENERALIZES` · `SAMPLE-SPECIFIC` · `N-A`",
         "",
-        "## Scorecard",
+        "## Scorecard overview",
         "",
-        "| Q | Topic | Verdict | Method vs. original | Validator material | Held-back key material | Note |",
-        "|---:|---|---|---|---|---|---|",
+        "Exact comparison is the default. Only structurally recognized p-value fields use the pipeline-owned "
+        "absolute band of `0.005`; values inside that band remain flagged as **WITHIN_TOLERANCE**, never exact.",
+        "",
+        "| Q | Topic | Verdict | Exact | Within tolerance | Different | Contract issues | Validator-only | Origin-only | Note |",
+        "|---:|---|---|---:|---:|---:|---:|---:|---:|---|",
     ]
     tally: dict[str, int] = {}
+    details: list[str] = []
+    from . import extract as extract_module
+    try:
+        run_value = str(run_dir.relative_to(project.root.resolve()))
+    except ValueError:
+        run_value = str(run_dir)
     for row in questions:
-        validator = _cell(_material(run_dir, row["new"]))
-        key = _cell(_material(key_dir, row["original"]))
+        extraction = extract_module.question_extraction(
+            project, run_value, row["new"], row["original"], stage=stage
+        )
+        counts = extraction.get("comparison_counts", {})
+        contract_issues = sum(
+            counts.get(name, 0) for name in ("validator_missing", "origin_missing", "unit_mismatch")
+        )
         entry = (verdicts or {}).get(row["new"]) or (verdicts or {}).get(str(row["new"])) or {}
         verdict = str(entry.get("verdict") or "PENDING")
         note = _cell(str(entry.get("note") or "")) or f"orig Q{row['original']}"
         tally[verdict] = tally.get(verdict, 0) + 1
         verdict_cell = verdict if graded else "**PENDING**"
         lines.append(
-            f"| {row['new']} | {_cell(row['topic'])} | {verdict_cell} | _(record)_ | {validator} | {key} | {note} |"
+            f"| {row['new']} | {_cell(row['topic'])} | {verdict_cell} | "
+            f"{counts.get('exact', 0)} | {counts.get('within_tolerance', 0)} | "
+            f"{counts.get('different', 0)} | {contract_issues} | "
+            f"{counts.get('validator_only', 0)} | "
+            f"{len(extraction.get('origin_only', []))} | {note} |"
         )
+        details.extend([
+            "",
+            f"### Q{row['new']} — {row['topic']}",
+            "",
+            f"Comparison source: `{extraction.get('comparison_source', 'legacy_origin_text')}`",
+            "",
+            "| Validator field | Validator value | Origin value | Delta | Tolerance | Status |",
+            "|---|---:|---:|---:|---:|---|",
+        ])
+        stats = extraction.get("stats", [])
+        if stats:
+            for stat in stats:
+                details.append(
+                    f"| `{_cell(stat['label'])}` | {_comparison_cell(stat['value'])} | "
+                    f"{_comparison_cell(stat.get('origin_value'))} | "
+                    f"{_comparison_cell(stat.get('delta_display'))} | "
+                    f"{_comparison_cell(stat.get('tolerance'))} | "
+                    f"**{str(stat.get('status', '')).upper()}** |"
+                )
+        else:
+            details.append("| — | — | — | — | — | **NO_MACHINE_VALUES** |")
+        origin_only_rows = extraction.get("origin_only", [])
+        if origin_only_rows:
+            details.extend([
+                "",
+                "**Origin-only numerical values**",
+                "",
+                *[f"- `{_cell(item['value'])}` — {_cell(item['context'])}" for item in origin_only_rows],
+            ])
+        origin_narrative = extraction.get("origin_narrative", "") or _material(key_dir, row["original"])
+        validator_narrative = extraction.get("validator_narrative", "") or _material(run_dir, row["new"])
+        details.extend([
+            "",
+            "<details><summary>Origin and validator narratives</summary>",
+            "",
+            "**Origin**",
+            "",
+            origin_narrative or "_(not found)_",
+            "",
+            "**Validator**",
+            "",
+            validator_narrative or "_(not found)_",
+            "",
+            "</details>",
+        ])
     tally_rows = [f"| {name} | {count} |" for name, count in tally.items()] or ["| PENDING | 0 |"]
     lines.extend(
         [
@@ -152,6 +222,9 @@ def build_scorecard(
             "| Verdict | Count |",
             "|---|---:|",
             *tally_rows,
+            "",
+            "## Deterministic comparisons",
+            *details,
             "",
             "## Method-choice distribution",
             "",

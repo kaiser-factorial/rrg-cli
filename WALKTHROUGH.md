@@ -44,7 +44,8 @@ my-validation/
 │   ├── STUDY_OVERVIEW.md        ← result-neutral study description
 │   ├── QUESTIONS.md             ← the validation questions
 │   ├── VALIDATION_INSTRUCTIONS.md ← held-constant definitions
-│   └── ANALYSIS_PROTOCOL_OG.md  ← original methodology (replication only)
+│   ├── ANALYSIS_PROTOCOL_OG.md  ← original methodology (replication only)
+│   └── METRIC_SPEC.json         ← ids, paths, types, units; no answers
 ├── prompts/                     ← stage prompt templates
 │   ├── replication.md
 │   ├── robustness.md
@@ -52,8 +53,14 @@ my-validation/
 └── operator/                    ← operator-only (never sent to validators)
     ├── origin/                  ← the held-back answer key
     │   ├── README.md
-    │   └── SUMMARY.md           ← per-question transcription of the origin report
+    │   ├── SUMMARY.md           ← per-question narrative
+    │   └── origin.json          ← canonical metric values
     ├── private/                 ← anything else withheld
+    ├── packages/                ← immutable outgoing packages + provenance
+    ├── runs/<stage>/            ← authoritative returned runs
+    ├── reviews/                 ← comparison notes + scorecards
+    ├── grading/                 ← human grading state
+    ├── archive/                 ← reversible archive
     └── OG_METHODOLOGY_PROMPT.md ← prompt for drafting the methodology
 ```
 
@@ -112,6 +119,11 @@ blinding:
     - ORIGIN_REPORT.pdf
     - ORIGIN_REPORT.md
 ```
+
+Populate `operator/origin/origin.json` with the canonical value/unit for every metric,
+and customize `shared/METRIC_SPEC.json` with the corresponding id, validator JSON path,
+kind, unit, and nullability. The public spec must never contain origin values,
+tolerances, formulas, or original-method details. `rrg doctor` validates both schemas.
 
 ---
 
@@ -274,20 +286,37 @@ rrg dispatch --stage replication --model "Qwen 3.7 Max" --validator hermes
 `agent` (built-in operator responses drive the discuss loop)
 
 The dispatch command:
-1. Builds the blinded package zip (blinding lint blocks if secrets leak)
-2. Extracts it to a temp dir outside the project (isolation)
-3. Sends the prompt turns to the validator via the chosen CLI
-4. Auto-imports the validator's output back into the project
-5. Auto-normalizes non-conforming file names
-6. Checks for blinding breaches (hash comparison against the answer key)
+1. Builds the blinded package zip (blinding lint blocks if secrets leak); the
+   published package dir is made read-only
+2. Extracts it to a temp dir outside the project and snapshots the project tree
+3. Sends the prompt turns to the validator via the chosen CLI, under an OS sandbox
+   that denies the project tree and confines writes to explicit roots (macOS); the first turn starts with the absolute
+   working directory and a file inventory
+4. Runs deterministic gates on the actual writable deliverable root; if structure or
+   internal semantics deviate (misnamed files, missing/wrong-unit metrics, failed
+   arithmetic relations, inconsistent DYFA markers, `p_value: 0`, or a figure script
+   that does not reproduce its PNG) it sends the blinded coded
+   violation list back as a revision turn and re-checks, up to `--gate-revisions N`
+   times (default 1; `--no-gates` to skip, `--no-exec-gates` to skip running scripts)
+5. Re-snapshots the project tree; anything the validator changed inside it is an
+   isolation breach (blocking grading) and files dropped into the package are
+   quarantined into the run
+6. Imports only validator-created/changed files through isolated staging, validates
+   the complete return, and atomically installs one provenance-selected run
+7. Writes `GATES.json` and auto-normalizes non-conforming file names after gating
+8. Checks for blinding breaches (hash comparison against the answer key)
+
+Exit code `3` means the gates still failed after the last revision — the files were
+imported anyway; read `GATES.json` in the run folder for the remaining violations.
 
 ---
 
 ## Step 9: Evaluate the run
 
 ```bash
-# Pipeline metrics (contract + breach + grading status)
-rrg eval --run operator/replication_hermes_qwen-3.7-max_2026-08-10__3a4c7025
+# Find the authoritative run, then inspect its contract + breach + grading status
+rrg runs
+rrg eval --run operator/runs/replication/<run-folder>
 ```
 
 Or use the rrg-eval skill to do a full scientific evaluation:
@@ -309,7 +338,10 @@ rrg scorecard --run <run_folder> --stage replication --model "default"
 
 The scorecard lays each validator result beside the origin key with a PENDING
 verdict. **The engine never assigns a final verdict — a human confirms every
-one.** Verdict vocabulary: REPRODUCED, CONVERGED, DIVERGED, INCOMPLETE, N/A.
+one.** Verdict vocabulary: REPRODUCED, CONVERGED, DIVERGED, INCOMPLETE, N-A.
+The scorecard and Review UI use the same comparison engine. Non-p metrics are
+exact-only; p-values alone use absolute tolerance `0.005`, with close non-exact values
+still flagged and their deltas shown.
 
 ---
 
@@ -324,7 +356,10 @@ rrg dispatch --stage robustness --model "default" --validator grok --mode agent
 
 In robustness, the methodology is **hidden** — the validator gets the data
 and questions but not `ANALYSIS_PROTOCOL_OG.md`. It must choose its own
-defensible analysis method.
+defensible analysis method. When configured, an approved result-neutral analysis
+contract fixes population, unit, inclusion/exclusion, time, constructs/outcomes, and
+missingness without revealing the original method or findings. Review the normalizer
+audit before enabling this stage.
 
 ---
 

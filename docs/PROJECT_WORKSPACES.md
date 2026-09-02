@@ -11,10 +11,11 @@ GUI may switch its active project within that workspace or scaffold a new child
 project. This preserves the engine/cartridge boundary and prevents files from one
 study from being routed into another study's package.
 
-## Proposed interface
+## Interface
 
 ```text
 rrg gui --workspace /path/to/RRG_root --open
+rrg workspace /path/to/RRG_root          # discover projects without launching GUI
 ```
 
 - The header shows the active project and a `Projects` control near `Setup`.
@@ -46,6 +47,11 @@ Project configuration is already saved by each project's `rrg.yaml` and
 `study.yaml`; no new multi-profile file format is required. Optional UI-only state
 may record the last active project and recent projects, but it must not become a
 source of scientific configuration.
+
+This interface is implemented. `rrg workspace` supports JSON output for agents, while
+`rrg paths --project <root>` shows the active project's effective operator layout.
+New projects separate packages, runs, reviews, grading, and archive state; legacy
+projects remain readable without automatic relocation.
 
 For the current workspace, LoveSmarter can remain the root project and demonstrations
 can live below `demo_projects/`, each with its own `.rrg_root` marker.

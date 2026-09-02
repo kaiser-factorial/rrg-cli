@@ -32,12 +32,12 @@ Most of what a process-eval needs is already on disk — derive, don't re-enter:
   vs manual fallback (import return `auto_resolved`); **deliverable-contract compliance** (does
   the returned run actually contain conforming `raw/Q<n>_summary.json`, the
   `Q<n>_analysis.py → raw/Q<n>_raw.csv → Q<n>_fig.py → Q<n>_fig.png` chain, and DYFA `## Q<n>`
-  sections?); file counts; re-runs needed. Sources: `operator/_packages/provenance_log.jsonl`,
-  `operator/_grading/*.breach.json`, the run folder contents.
+  sections?); file counts; re-runs needed. Sources: the configured packages root's
+  `provenance_log.jsonl`, configured grading root's breach records, and run contents.
 - **Outcomes / meaningfulness** — per-question verdict distribution (REPRODUCED / CONVERGED /
   DIVERGED / …) from grading state; inter-model agreement when ≥2 validators; reproduce-vs-copy
   signal (breach guard is one input); human grading effort (verdicts confirmed, reopens).
-  Sources: `operator/_grading/*.json`, the cross-run overview.
+  Sources: the configured grading root's JSON records and the cross-run overview.
 
 Deliverable: a per-run scorecard-style **eval report** (markdown/JSON) the operator and Claude
 can both read. Likely `rrg eval --run <path>` writing `operator/_eval/EVAL_<run>.md`.

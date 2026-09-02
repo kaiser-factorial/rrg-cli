@@ -33,6 +33,8 @@ Resolved from `rrg.yaml`, not enumerated by hand:
 - **`files.withheld` / `blinding.always_withhold`** — glob patterns that must never
   reach any package (the origin/results key, scorecards, operator-private files).
 - **The data derivatives** under `paths.data` — produced and verified by `rrg convert`.
+- **`shared/METRIC_SPEC.json`** — stable result ids/paths/kinds/units/nullability and
+  safe arithmetic relations, never values, tolerance, formulas, or origin methods.
 
 When you need the concrete file list for the current project, read it from
 `rrg.yaml > files` rather than assuming names — different projects (and the
@@ -56,12 +58,17 @@ LoveSmarter vs. MovieRatings conventions) use different basenames.
    origin summary (by original number) — the GUI *Origin* tab's separation matrix checks
    this the same way the scorecard later extracts (`## Q<n>`). A question flagged here is
    one the scorecard can't grade cleanly.
-5. **Gate on preflight:** `rrg preflight [--stage S]`. It is strict — every referenced
+5. **Canonicalize comparison inputs.** Populate operator-only
+   `operator/origin/origin.json` against the public metric ids. If a learned model
+   creates downstream variables, declare it under `study.yaml > derived_models` and
+   provide its approved operator-side evaluation record. For robustness, configure an
+   approved result-neutral analysis contract and review the normalizer's input audit.
+6. **Gate on preflight:** `rrg preflight [--stage S]`. It is strict — every referenced
    input must exist, every derivative must still verify against the recorded source
    hash, and each enabled stage must route and render its prompt cleanly. Exit `2` means
    not ready; fix before packaging. (`rrg doctor` is the softer, warning-only version
    for a quick health read.)
-6. **Hand off** to the stage-prep skills (`rrg-replication`, `rrg-robustness`), which
+7. **Hand off** to the stage-prep skills (`rrg-replication`, `rrg-robustness`), which
    call `rrg package` for a specific `{stage, model}` — that command stages the resolved
    send list, runs the blinding lint, and publishes only on PASS.
 

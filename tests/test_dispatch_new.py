@@ -147,6 +147,23 @@ def test_dispatch_auto_import(ready_project: Project, tmp_path: Path) -> None:
         assert result["import_result"]["count"] > 0
 
 
+def test_dispatch_imports_outputs_not_unchanged_package_inputs(ready_project: Project) -> None:
+    def side_effect(prompt, slug, work_dir, session_id=None):
+        root = Path(work_dir)
+        (root / "RESULT.txt").write_text("validator-created")
+        return ("Done.", session_id or "s1", "moonshot/kimi-k3")
+
+    with patch("rrg_cli.dispatch._exec_hermes_turn", side_effect=side_effect):
+        result = dispatch(
+            ready_project, "replication", "ReplicationModel", validator="hermes",
+            mode="nodiscuss", gates=False, auto_import=True,
+        )
+    run = Path(result["import_result"]["output_folder"])
+    assert (run / "RESULT.txt").is_file()
+    assert not (run / "STUDY_OVERVIEW.md").exists()
+    assert run == Path(result["package"]["output_folder"])
+
+
 def test_dispatch_no_auto_import(ready_project: Project) -> None:
     with patch("rrg_cli.dispatch._exec_hermes_turn") as mock_hermes:
         mock_hermes.return_value = ("Done.", "session123", "qwen/qwen3.7-max")

@@ -6,8 +6,12 @@ paths:
   shared: shared
   data: data
   operator: operator
-  packages: operator/_packages
-  compare_notes: operator/_compare_notes
+  runs: operator/runs
+  packages: operator/packages
+  reviews: operator/reviews
+  grading: operator/grading
+  archive: operator/archive
+  compare_notes: operator/reviews/compare-notes
 
 origin:
   vendor: OriginVendor
@@ -20,6 +24,7 @@ files:
     - shared/STUDY_OVERVIEW.md
     - shared/QUESTIONS.md
     - shared/VALIDATION_INSTRUCTIONS.md
+    - shared/METRIC_SPEC.json
     - data/analysis.csv
     - data/analysis.parquet
     - data/analysis.meta.json
@@ -94,7 +99,7 @@ blinding:
   result_token_scan:
     source: operator/origin
     action: flag
-    exclude_globs: ["*.csv", "*.parquet", "*.json"]
+    exclude_globs: ["*.csv", "*.parquet", "METRIC_SPEC.json"]
     ignore_tokens: []
 
 constraints:

@@ -3,7 +3,7 @@
 Preferences are stored in ``.rrg_prefs.yaml`` at the project root and provide
 defaults for ``rrg dispatch`` and ``rrg wizard`` so you don't need to pass six
 flags every time.  Per-project (not global) — each study may use different
-executors or modes.
+validators or modes.
 """
 
 from __future__ import annotations
@@ -22,10 +22,30 @@ DEFAULTS: dict[str, Any] = {
     "mode": "discuss",           # discuss | nodiscuss | agent
     "skip_normalize": False,    # skip auto-normalize on import?
     "auto_import": True,         # auto-import after dispatch completes?
+    "gates": True,               # run deterministic deliverable gates after the validator finishes?
+    "gate_revisions": 1,         # how many revision turns a failing gate may trigger (0 = report only)
+    "gate_exec": True,           # execute each Q<n>_fig.py and require it to reproduce Q<n>_fig.png (dispatch only)
+    "gate_python": "",           # interpreter for gate_exec; empty = auto-detect one with matplotlib + pandas
 }
 
 # Known pref keys (for validation in CLI/TUI)
-PREF_KEYS: tuple[str, ...] = ("validator", "mode", "skip_normalize", "auto_import")
+PREF_KEYS: tuple[str, ...] = (
+    "validator", "mode", "skip_normalize", "auto_import", "gates", "gate_revisions", "gate_exec", "gate_python",
+)
+BOOL_PREF_KEYS: tuple[str, ...] = ("skip_normalize", "auto_import", "gates", "gate_exec")
+INT_PREF_KEYS: tuple[str, ...] = ("gate_revisions",)
+
+
+def coerce_pref(key: str, value: Any) -> Any:
+    """Turn a user-typed string into the pref's native type (bool/int); other keys pass through."""
+    if key in BOOL_PREF_KEYS:
+        return value if isinstance(value, bool) else str(value).strip().lower() in ("true", "yes", "1", "on")
+    if key in INT_PREF_KEYS:
+        try:
+            return max(0, int(str(value).strip()))
+        except ValueError:
+            raise ValueError(f"{key} must be a non-negative integer, got {value!r}") from None
+    return value
 
 VALIDATOR_OPTIONS: tuple[str, ...] = ("manual", "hermes", "claude", "codex", "grok", "pool", "openrouter", "prime-agent")
 MODE_OPTIONS: tuple[str, ...] = ("discuss", "nodiscuss", "agent")

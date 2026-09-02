@@ -23,6 +23,7 @@ from .doctor import inspect_project
 from .errors import RRGError
 from .packager import build_package
 from .project import Project
+from .layout import archive_root, grading_root, packages_root, provenance_run_path, reviews_root, runs_root
 from .prompts import render_prompt
 from .scorecard import build_scorecard, load_question_map
 from .utils import dump_yaml, load_yaml, safe_label
@@ -71,7 +72,7 @@ class GUIState:
             return self.project
 
     def _provenance(self) -> list[dict[str, Any]]:
-        path = self.project.path_setting("packages", "operator/_packages") / "provenance_log.jsonl"
+        path = packages_root(self.project) / "provenance_log.jsonl"
         records: list[dict[str, Any]] = []
         if path.is_file():
             for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -99,7 +100,7 @@ class GUIState:
         return finalized
 
     def scorecards(self) -> list[dict[str, Any]]:
-        operator = self.project.path_setting("operator", "operator")
+        operator = reviews_root(self.project)
         finalized = self._finalized_scorecards()
         cards = []
         for path in sorted(operator.glob("SCORECARD_*.md"), key=lambda item: item.stat().st_mtime, reverse=True):
@@ -225,14 +226,36 @@ class GUIState:
 
     def runs(self) -> list[dict[str, Any]]:
         operator = self.project.path_setting("operator", "operator")
+        run_root = runs_root(self.project)
         records = self._provenance()
-        by_output = {str(Path(record.get("output_folder", "")).resolve()): record for record in records}
+        by_output = {
+            str(path): record for record in records
+            if (path := provenance_run_path(self.project, record)) is not None
+        }
         candidates: set[Path] = set()
         candidates.update(Path(path) for path in by_output if path)
+        if run_root.is_dir():
+            if run_root.resolve() == operator.resolve():
+                candidates.update(path for path in run_root.iterdir() if path.is_dir())
+            else:
+                for stage_dir in run_root.iterdir():
+                    if stage_dir.is_dir():
+                        candidates.update(path for path in stage_dir.iterdir() if path.is_dir())
+        # Compatibility: surface legacy run folders at operator/<stage>_<model> even
+        # after a project adopts the structured operator/runs layout.
+        reserved = {
+            path.resolve() for path in (
+                run_root, packages_root(self.project), reviews_root(self.project),
+                grading_root(self.project), archive_root(self.project),
+            )
+        }
         if operator.is_dir():
-            candidates.update(path for path in operator.iterdir() if path.is_dir())
+            candidates.update(
+                path for path in operator.iterdir()
+                if path.is_dir() and path.resolve() not in reserved
+            )
         excluded = self._excluded_run_roots()
-        package_root = self.project.path_setting("packages", "operator/_packages")
+        package_root = packages_root(self.project)
         rows = []
         question_list = self.questions()
         for path in sorted(candidates, key=lambda item: item.name.lower()):
@@ -278,7 +301,7 @@ class GUIState:
         return "unknown"
 
     def stages(self) -> list[dict[str, Any]]:
-        package_root = self.project.path_setting("packages", "operator/_packages")
+        package_root = packages_root(self.project)
         runs = self.runs()
         rows = []
         configs = [self.project.stage(stage_id) for stage_id in self.project.stage_ids()]
@@ -455,10 +478,11 @@ class GUIState:
                 return 4
             return 99
 
-        ranked = sorted(((rank(stat["label"]), index, stat) for index, stat in enumerate(stats)))
+        reported = [stat for stat in stats if stat.get("value") not in {None, ""}]
+        ranked = sorted(((rank(stat["label"]), index, stat) for index, stat in enumerate(reported)))
         if ranked and ranked[0][0] < 99:
             return ranked[0][2]
-        return stats[0] if stats else None
+        return reported[0] if reported else None
 
     def cross_run_overview(self) -> dict[str, Any]:
         """A question x run snapshot: each cell shows a run's headline statistic for
@@ -483,12 +507,16 @@ class GUIState:
                     "label": stat["label"] if stat else "",
                     "value": stat["value"] if stat else "",
                     "in_origin": bool(stat["in_origin"]) if stat else False,
+                    "exact": bool(stat.get("exact")) if stat else False,
+                    "within_tolerance": bool(stat.get("within_tolerance")) if stat else False,
+                    "status": stat.get("status", "") if stat else "",
                     "origin_value": stat["origin_value"] if stat else "",
                 }
-                if cell["in_origin"] and cell["origin_value"] and not origin_value:
+                if cell["exact"] and cell["origin_value"] and not origin_value:
                     origin_value = cell["origin_value"]
                 cells.append(cell)
-            matched = sum(1 for cell in cells if cell["in_origin"])
+            matched = sum(1 for cell in cells if cell["exact"])
+            within = sum(1 for cell in cells if cell["within_tolerance"])
             with_stats = sum(1 for cell in cells if cell["has_stats"])
             rows.append(
                 {
@@ -497,7 +525,10 @@ class GUIState:
                     "topic": question["topic"],
                     "origin_value": origin_value,
                     "cells": cells,
-                    "agreement": f"{matched}/{with_stats}" if with_stats else "—",
+                    "agreement": (
+                        f"{matched}/{with_stats} exact" + (f", {within} within tolerance" if within else "")
+                        if with_stats else "—"
+                    ),
                 }
             )
         return {"questions": [{"new": q["new"], "topic": q["topic"]} for q in questions], "runs": run_cols, "rows": rows}

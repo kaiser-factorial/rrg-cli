@@ -32,6 +32,7 @@ def test_dry_run_writes_nothing(ready_project):
 def test_linter_blocks_unexpected_scorecard(ready_project, tmp_path: Path):
     result = build_package(ready_project, "robustness", "RobustnessModel")
     package = Path(result["package_dir"])
+    package.chmod(0o755)  # published packages are read-only; simulate tampering
     (package / "SCORECARD_leak.md").write_text("held-back result .44")
     report = lint_package(package, "robustness", ready_project)
     assert not report.passed

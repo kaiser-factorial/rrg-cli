@@ -1,0 +1,29 @@
+{
+  "schema_version": "rrg.metric-specs.v1",
+  "questions": {
+    "1": {
+      "metrics": [
+        {"id": "n", "label": "Analysis N", "validator_path": "n", "kind": "count", "unit": "count", "nullable": false},
+        {"id": "statistic", "label": "Primary statistic", "validator_path": "statistic", "kind": "scalar", "unit": "1", "nullable": false},
+        {"id": "p_value", "label": "Primary p-value", "validator_path": "p_value", "kind": "p_value", "unit": "probability", "nullable": true},
+        {"id": "effect_size", "label": "Primary effect size", "validator_path": "effect_size", "kind": "scalar", "unit": "1", "nullable": true}
+      ]
+    },
+    "2": {
+      "metrics": [
+        {"id": "n", "label": "Analysis N", "validator_path": "n", "kind": "count", "unit": "count", "nullable": false},
+        {"id": "statistic", "label": "Primary statistic", "validator_path": "statistic", "kind": "scalar", "unit": "1", "nullable": false},
+        {"id": "p_value", "label": "Primary p-value", "validator_path": "p_value", "kind": "p_value", "unit": "probability", "nullable": true},
+        {"id": "effect_size", "label": "Primary effect size", "validator_path": "effect_size", "kind": "scalar", "unit": "1", "nullable": true}
+      ]
+    },
+    "3": {
+      "metrics": [
+        {"id": "n", "label": "Analysis N", "validator_path": "n", "kind": "count", "unit": "count", "nullable": false},
+        {"id": "statistic", "label": "Primary statistic", "validator_path": "statistic", "kind": "scalar", "unit": "1", "nullable": false},
+        {"id": "p_value", "label": "Primary p-value", "validator_path": "p_value", "kind": "p_value", "unit": "probability", "nullable": true},
+        {"id": "effect_size", "label": "Primary effect size", "validator_path": "effect_size", "kind": "scalar", "unit": "1", "nullable": true}
+      ]
+    }
+  }
+}

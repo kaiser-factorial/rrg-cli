@@ -1,8 +1,13 @@
-"""Validator dispatch: build → prompt → run validator → collect → import → normalize.
+"""Validator dispatch: build → prompt → run validator → gate → collect → import → normalize.
+
+Isolation is enforced, not assumed (see ``sandbox.py``): every validator command runs
+under an OS sandbox that denies the project tree where the platform supports one, the
+project tree is snapshotted before and after the run so any escape is detected and
+quarantined, and the first turn tells the validator exactly where it is and what it has.
 
 Validators supported:
   - manual:    prints instructions for external execution
-  - hermes:    shells out to `hermes -z` (OpenRouter via Hermes agent CLI)
+  - hermes:    shells out to `hermes chat -Q` (OpenRouter via Hermes agent CLI)
   - claude:    shells out to `claude -p` (Claude Code CLI)
   - codex:     shells out to `codex exec` (Codex CLI)
   - grok:      shells out to `grok -p --single` (Grok CLI)
@@ -31,7 +36,29 @@ from .packager import build_package
 from .prefs import load_prefs
 from .project import Project
 from .prompts import render_prompt
+from .sandbox import make_sandbox, wrap, _git_toplevel
 from .utils import safe_label
+
+TURN_TIMEOUT = 900  # seconds per validator turn
+
+# argv prefix (an OS sandbox wrapper) applied to every validator command for the current
+# dispatch. Module state rather than a parameter so the per-validator functions keep the
+# signature tests patch.
+_SANDBOX_PREFIX: list[str] = []
+
+
+def _validator_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.setdefault("MPLBACKEND", "Agg")  # never probe for a GUI backend from a headless run
+    return env
+
+
+def _run(cmd: list[str], work_dir: str, timeout: int = TURN_TIMEOUT) -> subprocess.CompletedProcess[str]:
+    """Run a validator command in the work dir, under the dispatch's sandbox prefix."""
+    return subprocess.run(
+        wrap(_SANDBOX_PREFIX, cmd), capture_output=True, text=True, cwd=work_dir,
+        timeout=timeout, env=_validator_env(),
+    )
 
 # ---------------------------------------------------------------------------
 # Slug resolution
@@ -137,36 +164,57 @@ def _call_openrouter(
         raise RRGError(f"OpenRouter API error: {exc}")
 
 
+_HERMES_SESSION_RE = re.compile(r"^session_id:\s*(\S+)", re.MULTILINE)
+_HERMES_NOISE = ("Warning: Unknown toolsets",)
+
+
+def _parse_hermes_output(stdout: str, stderr: str, session_id: str | None) -> tuple[str, str | None]:
+    """`hermes chat -Q` prints only the reply on stdout and `session_id: …` on stderr."""
+    match = _HERMES_SESSION_RE.search(stderr or "")
+    new_sid = match.group(1) if match else session_id
+    text = "\n".join(
+        line for line in (stdout or "").splitlines() if not line.startswith(_HERMES_NOISE)
+    ).strip()
+    return text, new_sid
+
+
 def _exec_hermes_turn(
     prompt: str, slug: str, work_dir: str, session_id: str | None = None,
 ) -> tuple[str, str | None, str | None]:
-    """Send one turn to hermes -z. Returns (response, session_id, model)."""
-    cmd = ["hermes", "-z", prompt]
+    """Send one turn to `hermes chat -Q`. Returns (response, session_id, model).
+
+    Not `hermes -z`: its `--resume` starts a fresh session every time (verified 2026-09-02
+    with a two-call probe), so every RRG turn was an isolated one-shot and the validator
+    met the Execute turn with no memory of Orient. `hermes chat -Q --resume` resumes for
+    real. `--in` pins the working directory so a resumed session cannot wander back to a
+    recorded cwd, and the prompt travels via `--query-file` so nothing is shell-interpreted.
+    """
+    fd, query_file = tempfile.mkstemp(prefix="rrg_turn_", suffix=".md", text=True)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(prompt)
+    cmd = [
+        "hermes", "chat", "-Q", "--query-file", query_file,
+        "--in", work_dir, "--no-restore-cwd", "--run-budget", str(TURN_TIMEOUT),
+    ]
     if slug:
         cmd.extend(["-m", slug, "--provider", "openrouter"])
     if session_id:
         cmd.extend(["--resume", session_id])
-    # Use --usage-file to capture session_id + model
-    usage_file = os.path.join(work_dir, ".rrg_hermes_usage.json")
-    cmd.extend(["--usage-file", usage_file])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        result = _run(cmd, work_dir)
         if result.returncode != 0:
             return f"[hermes error: exit {result.returncode}]\n{result.stderr}", session_id, None
-        # Parse usage file for session_id and model
-        new_sid = session_id
-        model = None
-        try:
-            usage = json.loads(Path(usage_file).read_text())
-            new_sid = usage.get("session_id", session_id)
-            model = usage.get("model")
-        except (json.JSONDecodeError, OSError):
-            pass
-        return result.stdout, new_sid, model
+        text, new_sid = _parse_hermes_output(result.stdout, result.stderr, session_id)
+        return text, new_sid, (slug or None)
     except FileNotFoundError:
         raise RRGError("hermes CLI not found; install it or use --validator manual")
     except subprocess.TimeoutExpired:
-        raise RRGError("hermes timed out after 900 seconds")
+        raise RRGError(f"hermes timed out after {TURN_TIMEOUT} seconds")
+    finally:
+        try:
+            os.unlink(query_file)
+        except OSError:
+            pass
 
 
 def _exec_claude_turn(
@@ -177,7 +225,7 @@ def _exec_claude_turn(
     if session_id:
         cmd.extend(["--resume", session_id])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        result = _run(cmd, work_dir)
         if result.returncode != 0:
             return f"[claude error: exit {result.returncode}]\n{result.stderr}", session_id, None
         # Parse JSON output for session_id and model
@@ -210,7 +258,7 @@ def _exec_codex_turn(
     else:
         cmd = ["codex", "exec", "--json", "--skip-git-repo-check", prompt]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        result = _run(cmd, work_dir)
         if result.returncode != 0:
             return f"[codex error: exit {result.returncode}]\n{result.stderr}", session_id, None
         # Parse JSONL for session_id and model
@@ -247,7 +295,7 @@ def _exec_grok_turn(
     if session_id:
         cmd.extend(["--resume", session_id])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        result = _run(cmd, work_dir)
         if result.returncode != 0:
             return f"[grok error: exit {result.returncode}]\n{result.stderr}", session_id, None
         # Parse JSON output for session_id and model
@@ -279,7 +327,7 @@ def _exec_pool_turn(
     if session_id:
         cmd.extend(["--continue", session_id])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir, timeout=900)
+        result = _run(cmd, work_dir)
         if result.returncode not in (0, 4):
             return f"[pool error: exit {result.returncode}]\n{result.stderr}", session_id, None
         # Parse NLJSON for session/run ID and model
@@ -351,43 +399,152 @@ OPTIONAL_MODEL_VALIDATORS = {"hermes", "codex", "grok", "claude", "pool"}
 
 
 
+def _send_turn(
+    validator: str, text: str, slug: str, work_dir: str, session_id: str | None,
+) -> tuple[str, str | None, str | None]:
+    """Send one turn to a CLI validator, looked up by name so tests can patch it."""
+    import sys
+    exec_fn = getattr(sys.modules[__name__], f"_exec_{validator}_turn", None)
+    if exec_fn is None:
+        raise RRGError(f"validator not implemented: {validator}")
+    if validator in SLUG_VALIDATORS:
+        return exec_fn(text, slug, work_dir, session_id)
+    return exec_fn(text, work_dir, session_id)
+
+
+def _gate_loop(
+    validator: str,
+    slug: str,
+    work_dir: str,
+    session_id: str | None,
+    gate_spec: dict[str, Any],
+    conversation: list[dict[str, Any]],
+    detected_model: str | None,
+) -> dict[str, Any]:
+    """Deterministic deliverable gates with an observation → revision loop.
+
+    After the validator's final turn, check the work dir against the deliverable contract.
+    Each hard failure becomes a revision turn (same session) listing every violation with
+    the expected fix, up to ``max_revisions`` times. The validator never sees anything but
+    filenames, key names, and codes.
+    """
+    from .gates import check_gates
+
+    max_revisions = int(gate_spec.get("max_revisions", 1) or 0)
+    kwargs = {
+        "question_count": int(gate_spec.get("question_count", 0) or 0),
+        "report_name": str(gate_spec.get("report_name", "") or ""),
+        "output_folder": gate_spec.get("output_folder"),
+        "exec_figures": bool(gate_spec.get("exec_figures", False)),
+        "exec_python": gate_spec.get("exec_python") or None,
+        "exec_prefix": list(gate_spec.get("exec_prefix") or []),
+        "exec_deny": list(gate_spec.get("exec_deny") or []),
+    }
+    result = check_gates(work_dir, **kwargs)
+    history = [result.as_observation()]
+    revisions = 0
+    stopped: str | None = None
+    # Any violation — hard or advisory — earns a revision turn while revisions remain.
+    # Only hard violations decide pass/fail. If a revision left the advisory set exactly
+    # as it was, the model has declined (or it does not apply); don't repeat the same ask.
+    while not result.clean and revisions < max_revisions:
+        if revisions and result.passed and history[-1]["soft"] == history[-2]["soft"]:
+            stopped = "advisory items unchanged after revision; not re-sending"
+            break
+        revisions += 1
+        feedback = result.feedback(revisions, max_revisions)
+        response, session_id, model = _send_turn(validator, feedback, slug, work_dir, session_id)
+        conversation.append({
+            "turn": len(conversation) + 1,
+            "title": f"Gate revision {revisions}",
+            "prompt": feedback,
+            "response": response,
+            "session_id": session_id,
+            "model": model or detected_model,
+            "gate": history[-1],
+        })
+        result = check_gates(work_dir, **kwargs)
+        history.append(result.as_observation())
+    return {
+        "enabled": True,
+        "passed": result.passed,
+        "clean": result.clean,
+        "revisions": revisions,
+        "max_revisions": max_revisions,
+        "stopped": stopped,
+        "root": result.root,
+        "summary": result.summary_line(),
+        "history": history,
+        "final": history[-1],
+    }
+
+
+INVENTORY_LIMIT = 200
+
+
+def _inventory_preamble(work_dir: str, sandboxed: bool = False) -> str:
+    """Tell the validator where it is and what it has, before anything else.
+
+    A real run showed an agent that never listed its own working directory: it searched
+    the home directory for the study files, found the project tree, and worked there.
+    An explicit absolute path plus the file inventory removes the reason to look elsewhere.
+    """
+    root = Path(work_dir).resolve()
+    files = sorted(
+        str(p.relative_to(root)) for p in root.rglob("*")
+        if p.is_file() and p.name != ".DS_Store" and not p.name.startswith(".rrg_")
+    )
+    enforcement = (
+        " Access to the rest of this machine's project files is denied at the operating-system level."
+        if sandboxed else ""
+    )
+    lines = [
+        "## Working directory",
+        "",
+        f"You are working in `{root}`. Every input you need is already in this directory, "
+        "and every output you produce must be written inside it. Do not search, read, or "
+        "write anywhere outside this directory — nothing else on this machine is part of "
+        f"the task.{enforcement}",
+        "",
+        "Files present:",
+    ]
+    lines.extend(f"- `{name}`" for name in files[:INVENTORY_LIMIT])
+    if len(files) > INVENTORY_LIMIT:
+        lines.append(f"- … and {len(files) - INVENTORY_LIMIT} more")
+    return "\n".join(lines)
+
+
 def _run_validator(
     validator: str,
     rendered: Any,
     slug: str,
     work_dir: str,
     mode: str,
-) -> list[dict[str, Any]]:
-    """Run the multi-turn validator loop. Returns conversation history."""
+    gate_spec: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run the multi-turn validator loop. Returns (conversation history, gate result)."""
     conversation: list[dict[str, Any]] = []
     session_id: str | None = None
     messages: list[dict[str, str]] = []  # for openrouter conversation accumulation
 
     detected_model: str | None = None
+    preamble = _inventory_preamble(work_dir, sandboxed=bool(_SANDBOX_PREFIX)) if validator != "openrouter" else ""
     for i, turn in enumerate(rendered.turns, 1):
+        text = f"{preamble}\n\n{turn.text}" if (i == 1 and preamble) else turn.text
         if validator == "openrouter":
-            messages.append({"role": "user", "content": turn.text})
-            response = _call_openrouter(turn.text, slug, messages)
+            messages.append({"role": "user", "content": text})
+            response = _call_openrouter(text, slug, messages)
             messages.append({"role": "assistant", "content": response})
             detected_model = slug
         else:
-            # Look up the validator function by name so mocks can patch it
-            import sys
-            exec_fn = getattr(sys.modules[__name__], f"_exec_{validator}_turn", None)
-            if exec_fn is None:
-                raise RRGError(f"validator not implemented: {validator}")
-
-            if validator in SLUG_VALIDATORS:
-                response, session_id, model = exec_fn(turn.text, slug, work_dir, session_id)
-            else:
-                response, session_id, model = exec_fn(turn.text, work_dir, session_id)
+            response, session_id, model = _send_turn(validator, text, slug, work_dir, session_id)
             if model and not detected_model:
                 detected_model = model
 
         conversation.append({
             "turn": i,
             "title": turn.title,
-            "prompt": turn.text,
+            "prompt": text,
             "response": response,
             "session_id": session_id,
             "model": model if validator != "openrouter" else slug,
@@ -401,12 +558,7 @@ def _run_validator(
                 op_reply = _call_openrouter(op_response, slug, messages)
                 messages.append({"role": "assistant", "content": op_reply})
             else:
-                import sys as _sys
-                _exec_fn = getattr(_sys.modules[__name__], f"_exec_{validator}_turn", None)
-                if validator in SLUG_VALIDATORS:
-                    op_reply, session_id, _ = _exec_fn(op_response, slug, work_dir, session_id)
-                else:
-                    op_reply, session_id, _ = _exec_fn(op_response, work_dir, session_id)
+                op_reply, session_id, _ = _send_turn(validator, op_response, slug, work_dir, session_id)
             conversation.append({
                 "turn": i,
                 "title": "Operator response (agent)",
@@ -421,7 +573,114 @@ def _run_validator(
         final = conversation[-1]["response"]
         (Path(work_dir) / "SUMMARY.md").write_text(final, encoding="utf-8")
 
-    return conversation
+    # Deliverable gates: only meaningful for validators that write files.
+    if not gate_spec:
+        gates: dict[str, Any] = {"enabled": False, "reason": "gates disabled"}
+    elif validator == "openrouter":
+        gates = {"enabled": False, "reason": "openrouter has no filesystem; nothing to gate"}
+    else:
+        gates = _gate_loop(validator, slug, work_dir, session_id, gate_spec, conversation, detected_model)
+
+    return conversation, gates
+
+
+# ---------------------------------------------------------------------------
+# Project-tree write detection (backstop for the sandbox)
+# ---------------------------------------------------------------------------
+
+_SNAPSHOT_SKIP = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache"}
+
+
+def _tree_root(project: Project) -> Path:
+    """The tree to watch: the git checkout containing the project, else the project."""
+    root = Path(project.root).resolve()
+    return _git_toplevel(root) or root
+
+
+def _snapshot_tree(root: Path) -> dict[str, tuple[int, int]]:
+    """{relative path: (size, mtime_ns)} for every file under root."""
+    snapshot: dict[str, tuple[int, int]] = {}
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _SNAPSHOT_SKIP]
+        for name in filenames:
+            if name == ".DS_Store":
+                continue
+            path = Path(dirpath) / name
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            snapshot[str(path.relative_to(root))] = (stat.st_size, stat.st_mtime_ns)
+    return snapshot
+
+
+def _detect_escapes(
+    root: Path,
+    before: dict[str, tuple[int, int]],
+    after: dict[str, tuple[int, int]],
+    package_dir: str | None,
+    collected_dir: Path,
+    project_root: Path | None = None,
+) -> dict[str, Any]:
+    """Diff two snapshots of the watched tree.
+
+    Every change is recorded with a ``scope``: ``project`` for files under the RRG project
+    itself, ``checkout`` for the rest of the git checkout (sibling studies, source code).
+    Only project-scope changes are treated as an isolation breach — an operator editing
+    source, or a second dispatch building its package in another workspace, changes the
+    checkout during a validator run and must not block grading. New files inside the
+    published package dir are the validator's deliverables landing in the wrong place:
+    they are moved into the collection dir (so import still works and the package is
+    pristine again) and the escape is recorded.
+    """
+    new = sorted(k for k in after if k not in before)
+    modified = sorted(k for k in after if k in before and after[k] != before[k])
+    removed = sorted(k for k in before if k not in after)
+
+    def _rel_under(path: str | Path | None) -> str | None:
+        if not path:
+            return None
+        try:
+            rel = str(Path(path).resolve().relative_to(root))
+        except ValueError:
+            return None
+        return "" if rel == "." else rel
+
+    pkg_rel = _rel_under(package_dir)
+    proj_rel = _rel_under(project_root) if project_root is not None else ""
+
+    def _scope(rel: str) -> str:
+        if proj_rel is None:
+            return "checkout"
+        if proj_rel == "" or rel == proj_rel or rel.startswith(proj_rel + os.sep):
+            return "project"
+        return "checkout"
+
+    records: list[dict[str, str]] = []
+    for rel in new:
+        record = {"path": rel, "change": "new", "scope": _scope(rel)}
+        if pkg_rel and rel.startswith(pkg_rel + os.sep):
+            inner = Path(rel).relative_to(pkg_rel)
+            target = collected_dir / inner
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.move(str(root / rel), str(target))
+                    record["quarantined_to"] = str(inner)
+                except OSError:
+                    pass
+        records.append(record)
+    records.extend({"path": rel, "change": "modified", "scope": _scope(rel)} for rel in modified)
+    records.extend({"path": rel, "change": "removed", "scope": _scope(rel)} for rel in removed)
+    breaches = [r for r in records if r["scope"] == "project"]
+    return {
+        "root": str(root),
+        "count": len(records),
+        "records": records,
+        "breaches": breaches,
+        "notes": [r for r in records if r["scope"] != "project"],
+        "quarantined": [r for r in records if r.get("quarantined_to")],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -497,7 +756,8 @@ def _reuse_package(project: Project, stage: str, model: str, label: str | None) 
         if run.get("stage") == stage and model.lower() in str(run.get("model", "")).lower():
             run_id = run.get("run_id")
             if run_id:
-                pkg_root = project.path_setting("packages", "operator/_packages")
+                from .layout import packages_root
+                pkg_root = packages_root(project)
                 for pkg_dir in sorted(pkg_root.rglob(f"*{run_id}*"), reverse=True):
                     if pkg_dir.is_dir():
                         zip_path = Path(str(pkg_dir) + ".zip")
@@ -506,7 +766,7 @@ def _reuse_package(project: Project, stage: str, model: str, label: str | None) 
                             "run_id": run_id,
                             "package_dir": str(pkg_dir),
                             "package_zip": str(zip_path) if zip_path.exists() else None,
-                            "output_folder": str(project.path_setting("operator", "operator") / f"{stage}_{safe_label(model)}__{run_id}"),
+                            "output_folder": str(project.path(str(run.get("path") or ""))),
                             "report_name": None,
                             "lint": {"passed": True, "hard_fails": [], "flags": []},
                             "provenance": {},
@@ -566,12 +826,18 @@ def dispatch(
     skip_normalize: bool | None = None,
     auto_import: bool | None = None,
     force: bool = False,
+    gates: bool | None = None,
+    gate_revisions: int | None = None,
+    gate_exec: bool | None = None,
+    gate_python: str | None = None,
 ) -> dict[str, Any]:
     """Orchestrate a validation dispatch.
 
     1. Build (or reuse) the package.
     2. Render the prompt for the given mode.
     3. Execute via the chosen validator (manual/hermes/claude/codex/grok/openrouter/prime-agent).
+       When the validator finishes, run the deliverable gates; on failure, send the
+       violations back as a revision turn (up to ``gate_revisions`` times).
     4. (Optionally) import results and normalize.
     """
     prefs = load_prefs(project)
@@ -587,6 +853,14 @@ def dispatch(
         skip_normalize = prefs.get("skip_normalize", False)
     if auto_import is None:
         auto_import = prefs.get("auto_import", True)
+    if gates is None:
+        gates = bool(prefs.get("gates", True))
+    if gate_revisions is None:
+        gate_revisions = int(prefs.get("gate_revisions", 1) or 0)
+    if gate_exec is None:
+        gate_exec = bool(prefs.get("gate_exec", True))
+    if gate_python is None:
+        gate_python = str(prefs.get("gate_python", "") or "")
 
     # Step 1: Build (or reuse) the package
     if reuse:
@@ -599,6 +873,8 @@ def dispatch(
             "package": pkg_result, "prompt": None, "zip_path": None,
             "validator": validator, "mode": mode, "conversation": [],
             "import_result": None, "normalize_result": None,
+            "gates": {"enabled": False, "reason": "package blocked"},
+            "sandbox": None, "escapes": None,
             "instructions": "Package blocked by blinding lint. Use --force to override.",
         }
 
@@ -617,9 +893,26 @@ def dispatch(
     conversation: list[dict[str, Any]] = []
     instructions = ""
     collected_dir: Path | None = None
+    collected_baseline: dict[str, tuple[int, int]] | None = None
+    gate_result: dict[str, Any] = {"enabled": False, "reason": "gates disabled"}
+    gate_spec: dict[str, Any] | None = None
+    sandbox: dict[str, Any] | None = None
+    escapes: dict[str, Any] | None = None
+    if gates:
+        from .gates import project_question_count
+        gate_spec = {
+            "question_count": project_question_count(project),
+            "report_name": rendered.report_name,
+            "output_folder": rendered.output_folder,
+            "max_revisions": gate_revisions,
+            "exec_figures": gate_exec,
+            "exec_python": gate_python or None,
+            "exec_prefix": [],
+        }
 
     if validator == "manual":
         instructions = _format_manual_instructions(zip_path, rendered, stage, model, run_id)
+        gate_result = {"enabled": False, "reason": "manual validator; gates run on `rrg import`"}
         # In agent mode, generate the conversation plan for reference
         if mode == "agent":
             for i, turn in enumerate(rendered.turns, 1):
@@ -645,20 +938,45 @@ def dispatch(
             marker = collected_dir / "RRG_RUN.txt"
             if marker.exists():
                 marker.unlink()
+        collected_baseline = _snapshot_tree(collected_dir)
 
-        conversation = _run_validator(validator, rendered, slug, str(collected_dir), mode)
+        # Enforced isolation: OS sandbox where available, write detection everywhere.
+        sandbox = make_sandbox(project, collected_dir, validator=validator)
+        if gate_spec is not None:
+            gate_spec["exec_prefix"] = list(sandbox["prefix"])
+            gate_spec["exec_deny"] = list(sandbox["deny"]) if sandbox["prefix"] else []
+        tree_root = _tree_root(project)
+        before = _snapshot_tree(tree_root)
+        global _SANDBOX_PREFIX
+        _SANDBOX_PREFIX = list(sandbox["prefix"])
+        try:
+            conversation, gate_result = _run_validator(
+                validator, rendered, slug, str(collected_dir), mode, gate_spec,
+            )
+        finally:
+            _SANDBOX_PREFIX = []
+        escapes = _detect_escapes(
+            tree_root, before, _snapshot_tree(tree_root), pkg_result.get("package_dir"), collected_dir,
+            project_root=Path(project.root),
+        )
 
     # Step 4: Import
     import_result: dict[str, Any] | None = None
     if auto_import and collected_dir is not None:
-        has_files = any(p.is_file() for p in collected_dir.rglob("*"))
+        from .gates import locate_deliverable_root
+        delivered_root = locate_deliverable_root(collected_dir, rendered.output_folder)
+        include_files: set[str] | None = None
+        if delivered_root == collected_dir and collected_baseline is not None:
+            after_collection = _snapshot_tree(collected_dir)
+            include_files = {
+                path for path, fingerprint in after_collection.items()
+                if path not in collected_baseline or collected_baseline[path] != fingerprint
+            }
+        has_files = (
+            any(p.is_file() for p in delivered_root.rglob("*"))
+            if include_files is None else bool(include_files)
+        )
         if has_files:
-            # Restore RRG_RUN.txt marker for auto-resolve
-            if run_id:
-                marker = collected_dir / "RRG_RUN.txt"
-                if not marker.exists():
-                    from .importer import render_run_marker
-                    marker.write_text(render_run_marker(run_id))
             # Extract model provenance — prefer model detected from JSON output, fall back to config
             detected_model = None
             if conversation:
@@ -669,9 +987,14 @@ def dispatch(
             model_name = detected_model or _get_model_provenance(validator, slug if validator in SLUG_VALIDATORS else "")
 
             import_result = import_run(
-                project, stage, model, collected_dir,
+                project, stage, model, delivered_root,
                 run_id=run_id, normalize=not skip_normalize,
                 validator=validator, model_provenance=model_name,
+                gates=gate_result if gate_result.get("enabled") else None,
+                wrote_inside_project=(escapes or {}).get("breaches") or [],
+                sandbox=sandbox,
+                include_files=include_files,
+                output_folder=rendered.output_folder,
             )
         shutil.rmtree(collected_dir, ignore_errors=True)
 
@@ -692,6 +1015,9 @@ def dispatch(
         "package": pkg_result, "prompt": prompt_summary, "zip_path": zip_path,
         "validator": validator, "mode": mode, "conversation": conversation,
         "import_result": import_result, "normalize_result": normalize_result,
+        "gates": gate_result,
+        "sandbox": sandbox,
+        "escapes": escapes,
         "instructions": instructions,
         "model_provenance": model_name,
     }

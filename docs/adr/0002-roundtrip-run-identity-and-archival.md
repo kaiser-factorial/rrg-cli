@@ -1,9 +1,13 @@
 # ADR 0002 — Round-trip run identity, breach detection, and archival lifecycle
 
-- **Status:** Accepted
+- **Status:** Accepted; path/import mechanics refined by ADR 0004
 - **Date:** 2026-06-23
 
 ## Context
+
+> Historical path examples below predate the explicit operator layout. New projects use
+> `operator/packages`, `operator/runs`, `operator/reviews`, `operator/grading`, and
+> `operator/archive`; ADR 0004 defines the transactional import boundary.
 
 ADR 0001 made delivery a self-contained zip, run **outside** the project, with `rrg import`
 bringing results back. That closed the *reach* breach at the artifact level but left three

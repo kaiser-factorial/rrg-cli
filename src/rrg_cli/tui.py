@@ -324,7 +324,7 @@ def _print_dispatch_result(result: dict[str, Any]) -> None:
                             border_style=WARN))
         return
 
-    console.print(f"  {OK} Run ID: [{GOLD}]{pkg.get('run_id', '\u2014')}[/]")
+    console.print(f"  {OK} Run ID: [{GOLD}]{pkg.get('run_id', '—')}[/]")
 
     if result.get("zip_path") and Path(result["zip_path"]).exists():
         console.print(f"  {OK} Package zip: {result['zip_path']}")
@@ -402,8 +402,12 @@ def run_tui_prefs(project: Project) -> None:
     if not value:
         return
 
-    if key in ("skip_normalize", "auto_import"):
-        value = value.lower() in ("true", "yes", "1")
+    from .prefs import coerce_pref
+    try:
+        value = coerce_pref(key, value)
+    except ValueError as exc:
+        console.print(f"  [{WARN}]{exc}[/]")
+        return
 
     save_prefs(project, {key: value})
     console.print(f"  [{SAGE}]Saved .rrg_prefs.yaml[/]")
