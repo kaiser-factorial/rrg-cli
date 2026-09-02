@@ -39,10 +39,20 @@ def _write_conforming(root: Path, n_questions: int = 3, report_name: str = REPOR
         )
         (root / f"Q{n}_fig.png").write_bytes(PNG)
         (root / "raw" / f"Q{n}_raw.csv").write_text("a,b\n1,2\n")
-        (root / "raw" / f"Q{n}_summary.json").write_text(json.dumps(_summary(n)))
+        summary = _summary(n)
+        metric_line = ""
+        if (root / "METRIC_SPEC.json").is_file():
+            summary["_units"] = {
+                "n": "count", "statistic": "1", "p_value": "probability", "effect_size": "1",
+            }
+            metric_line = (
+                f"Metrics: `n=100 count`; `statistic=2.5 1`; `p_value=0.013 probability`; "
+                f"`effect_size=0.3 1`\n\n"
+            )
+        (root / "raw" / f"Q{n}_summary.json").write_text(json.dumps(summary))
         sections.append(
             f"## Question {n}\n\n### D - Do\ntext\n\n### Y - Why\ntext\n\n### F - Find\n"
-            f"![Q{n} figure](Q{n}_fig.png)\n\n### A - Answer\ntext\n"
+            f"{metric_line}![Q{n} figure](Q{n}_fig.png)\n\n### A - Answer\ntext\n"
         )
     (root / report_name).write_text("# Report\n\n" + "\n".join(sections))
     (root / "RAW.md").write_text("# Raw index\n")
@@ -52,6 +62,52 @@ def _write_conforming(root: Path, n_questions: int = 3, report_name: str = REPOR
 def _codes(result, severity=None):
     items = result.violations if severity is None else getattr(result, severity)
     return sorted({v.code for v in items})
+
+
+def _write_metric_contract(root: Path) -> None:
+    (root / "METRIC_SPEC.json").write_text(json.dumps({
+        "schema_version": "rrg.metric-specs.v1",
+        "questions": {
+            "1": {
+                "metrics": [
+                    {"id": "component_a", "label": "Component A", "validator_path": "component_a", "kind": "currency", "unit": "USD_billion", "nullable": False},
+                    {"id": "component_b", "label": "Component B", "validator_path": "component_b", "kind": "currency", "unit": "USD_billion", "nullable": False},
+                    {"id": "component_total", "label": "Component total", "validator_path": "component_total", "kind": "currency", "unit": "USD_billion", "nullable": False},
+                    {"id": "bootstrap_p", "label": "Bootstrap p-value", "validator_path": "bootstrap.p", "kind": "p_value", "unit": "probability", "nullable": True},
+                ],
+                "relations": [
+                    {"id": "components_add", "op": "sum_equals", "inputs": ["component_a", "component_b"], "output": "component_total"}
+                ],
+            }
+        },
+    }), encoding="utf-8")
+
+
+def _write_metric_summary(root: Path, *, total: float = 8.2, p_value=0.047) -> None:
+    path = root / "raw" / "Q1_summary.json"
+    data = _summary(1)
+    data.update({
+        "component_a": 7.7,
+        "component_b": 0.5,
+        "component_total": total,
+        "bootstrap": {"p": p_value},
+        "_units": {
+            "component_a": "USD_billion",
+            "component_b": "USD_billion",
+            "component_total": "USD_billion",
+            "bootstrap_p": "probability",
+        },
+    })
+    path.write_text(json.dumps(data), encoding="utf-8")
+    report = root / REPORT
+    text = report.read_text(encoding="utf-8")
+    text = text.replace(
+        "### F - Find\n![Q1 figure](Q1_fig.png)",
+        "### F - Find\nMetrics: `component_a=7.7 USD_billion`; `component_b=0.5 USD_billion`; "
+        f"`component_total={total} USD_billion`; `bootstrap_p={p_value if p_value is not None else 'null'} probability`\n\n"
+        "![Q1 figure](Q1_fig.png)",
+    )
+    report.write_text(text, encoding="utf-8")
 
 
 # --- Pure gate checks -------------------------------------------------------
@@ -114,6 +170,51 @@ def test_summary_schema_violations(tmp_path: Path) -> None:
     assert (3, "INVALID_JSON") in hard
     key_violation = next(v for v in result.hard if v.code == "SUMMARY_MISSING_KEY")
     assert key_violation.expected == "key `effect_size`"
+
+
+def test_metric_contract_enforces_completeness_type_nullability_and_units(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 1)
+    _write_metric_contract(tmp_path)
+    _write_metric_summary(tmp_path)
+    summary_path = tmp_path / "raw" / "Q1_summary.json"
+    data = json.loads(summary_path.read_text())
+    del data["component_b"]
+    data["component_a"] = "$7.7 billion"
+    data["component_total"] = None
+    data["unexpected_numeric"] = 99
+    data["_units"]["component_a"] = "USD_million"
+    del data["_units"]["component_b"]
+    summary_path.write_text(json.dumps(data))
+
+    result = check_gates(tmp_path, 1, REPORT)
+    assert {"METRIC_MISSING", "METRIC_BAD_TYPE", "METRIC_NULL_NOT_ALLOWED", "METRIC_EXTRA", "METRIC_UNIT_MISMATCH", "METRIC_UNIT_MISSING"} <= set(_codes(result, "hard"))
+
+
+def test_arithmetic_and_dyfa_values_are_checked_without_origin_data(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 1)
+    _write_metric_contract(tmp_path)
+    _write_metric_summary(tmp_path, total=8.1)
+
+    result = check_gates(tmp_path, 1, REPORT)
+    codes = set(_codes(result, "hard"))
+    assert "ARITHMETIC_MISMATCH" in codes
+    # Change only the DYFA marker: JSON arithmetic is now sound, narrative is stale.
+    _write_metric_summary(tmp_path, total=8.2)
+    report = tmp_path / REPORT
+    report.write_text(report.read_text().replace("component_total=8.2", "component_total=8.1"))
+    result = check_gates(tmp_path, 1, REPORT)
+    assert "DYFA_METRIC_MISMATCH" in _codes(result, "hard")
+
+
+def test_semantic_feedback_contains_codes_and_paths_but_no_values(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 1)
+    _write_metric_contract(tmp_path)
+    _write_metric_summary(tmp_path, total=8.123456789)
+    feedback = check_gates(tmp_path, 1, REPORT).feedback(1, 1)
+    assert "ARITHMETIC_MISMATCH" in feedback
+    assert "raw/Q1_summary.json" in feedback
+    assert "8.123456789" not in feedback
+    assert "origin" not in feedback.lower()
 
 
 def test_real_world_shapes_are_advisory_not_blocking(tmp_path: Path) -> None:
@@ -391,9 +492,10 @@ def _soft_only_validator(fix_on_feedback: bool):
         if not (root / "raw").exists():
             _write_conforming(root, 3)
             for n in range(1, 4):
-                (root / "raw" / f"Q{n}_summary.json").write_text(
-                    json.dumps(_summary(n, groups={"a": 1}))
-                )
+                path = root / "raw" / f"Q{n}_summary.json"
+                summary = json.loads(path.read_text())
+                summary["groups"] = {"a": "annotation"}
+                path.write_text(json.dumps(summary))
         return ("Done.", session_id or "s1", "m")
 
     return side_effect, calls

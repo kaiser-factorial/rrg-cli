@@ -18,9 +18,10 @@ from rrg_cli.dispatch import _exec_hermes_turn, _parse_hermes_output, dispatch
 from rrg_cli.errors import RRGError
 from rrg_cli.packager import build_package
 from rrg_cli.project import Project
-from rrg_cli.sandbox import build_profile, deny_paths, make_sandbox, wrap
+from rrg_cli.sandbox import build_profile, deny_paths, make_sandbox, sandbox_exec_available, wrap
 
-HAS_SANDBOX = sys.platform == "darwin" and shutil.which("sandbox-exec") is not None
+_SANDBOX_BINARY = shutil.which("sandbox-exec")
+HAS_SANDBOX = bool(sys.platform == "darwin" and _SANDBOX_BINARY and sandbox_exec_available(_SANDBOX_BINARY))
 
 
 # --- sandbox -------------------------------------------------------------------
@@ -43,6 +44,12 @@ def test_profile_quotes_paths() -> None:
     assert '(subpath "/tmp/has \\"quote\\"")' in profile
 
 
+def test_profile_has_an_explicit_write_allowlist() -> None:
+    profile = build_profile([Path("/secret")], [Path("/work"), Path("/dev")])
+    assert "(deny file-write* (require-not (require-any" in profile
+    assert '(subpath "/work")' in profile and '(subpath "/dev")' in profile
+
+
 def test_make_sandbox_off_via_config(ready_project: Project, tmp_path: Path) -> None:
     ready_project.config.setdefault("dispatch", {})["sandbox"] = "off"
     box = make_sandbox(ready_project, tmp_path)
@@ -54,18 +61,22 @@ def test_make_sandbox_off_via_config(ready_project: Project, tmp_path: Path) -> 
 def test_sandbox_exec_denies_project_tree_but_allows_work_dir(ready_project: Project, tmp_path: Path) -> None:
     work = tmp_path / "work"
     work.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
     box = make_sandbox(ready_project, work)
-    assert box["mode"] == "sandbox-exec"
+    assert box["mode"] == "sandbox-exec" and box["write_enforced"] is True
     secret = ready_project.path("operator/origin/SUMMARY.md")
     assert secret.is_file()
     script = (
         f"cat {secret} >/dev/null 2>&1 && echo READ_OK || echo READ_DENIED; "
         f"touch {ready_project.root}/escaped.txt 2>/dev/null && echo WRITE_OK || echo WRITE_DENIED; "
+        f"touch {outside}/escaped.txt 2>/dev/null && echo OUTSIDE_OK || echo OUTSIDE_DENIED; "
         f"touch {work}/fine.txt && echo WORK_OK"
     )
     result = subprocess.run(wrap(box["prefix"], ["/bin/sh", "-c", script]), capture_output=True, text=True, timeout=30)
-    assert result.stdout.split() == ["READ_DENIED", "WRITE_DENIED", "WORK_OK"], result
+    assert result.stdout.split() == ["READ_DENIED", "WRITE_DENIED", "OUTSIDE_DENIED", "WORK_OK"], result
     assert not (ready_project.root / "escaped.txt").exists()
+    assert not (outside / "escaped.txt").exists()
 
 
 # --- hermes: real session chaining ------------------------------------------------

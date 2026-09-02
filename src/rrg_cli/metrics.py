@@ -21,6 +21,7 @@ PUBLIC_SPEC_SCHEMA = "rrg.metric-specs.v1"
 ORIGIN_RESULTS_SCHEMA = "rrg.origin-results.v1"
 
 METRIC_KINDS = {"scalar", "count", "currency", "percent", "proportion", "p_value"}
+RELATION_OPS = {"sum_equals", "difference_equals"}
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 _FORBIDDEN_PUBLIC_KEYS = {
     "answer",
@@ -130,6 +131,46 @@ def validate_public_metric_specs(value: dict[str, Any]) -> list[str]:
                 issues.append(f"{location}.unit must be a non-empty string")
             if "nullable" in metric and not isinstance(metric.get("nullable"), bool):
                 issues.append(f"{location}.nullable must be boolean")
+        relations = entry.get("relations", [])
+        if not isinstance(relations, list):
+            issues.append(f"{prefix}.relations must be a list when present")
+            continue
+        relation_ids: set[str] = set()
+        for index, relation in enumerate(relations):
+            location = f"{prefix}.relations[{index}]"
+            if not isinstance(relation, dict):
+                issues.append(f"{location} must be an object")
+                continue
+            allowed = {"id", "op", "inputs", "output"}
+            extra = sorted(set(relation) - allowed)
+            if extra:
+                issues.append(f"{location} has unsupported keys: {', '.join(extra)}")
+            relation_id = relation.get("id")
+            if not isinstance(relation_id, str) or not _IDENTIFIER_RE.fullmatch(relation_id):
+                issues.append(f"{location}.id must be a stable identifier")
+            elif relation_id in relation_ids:
+                issues.append(f"{location}.id duplicates {relation_id!r}")
+            else:
+                relation_ids.add(relation_id)
+            if relation.get("op") not in RELATION_OPS:
+                issues.append(f"{location}.op must be one of {', '.join(sorted(RELATION_OPS))}")
+            inputs = relation.get("inputs")
+            minimum = 2 if relation.get("op") == "sum_equals" else 2
+            if not isinstance(inputs, list) or len(inputs) < minimum or not all(isinstance(item, str) and item in ids for item in inputs):
+                issues.append(f"{location}.inputs must list at least {minimum} declared metric ids")
+            if relation.get("op") == "difference_equals" and isinstance(inputs, list) and len(inputs) != 2:
+                issues.append(f"{location}.inputs must contain exactly two ids for difference_equals")
+            if not isinstance(relation.get("output"), str) or relation.get("output") not in ids:
+                issues.append(f"{location}.output must name a declared metric id")
+            # Addition and subtraction are meaningful only within one declared unit.
+            metric_units = {
+                metric.get("id"): metric.get("unit") for metric in metrics if isinstance(metric, dict)
+            }
+            referenced = list(inputs) if isinstance(inputs, list) else []
+            referenced.append(relation.get("output"))
+            units = {metric_units.get(item) for item in referenced if item in metric_units}
+            if len(units) > 1:
+                issues.append(f"{location} references metrics with different units")
     return issues
 
 

@@ -938,7 +938,7 @@ def dispatch(
                 marker.unlink()
 
         # Enforced isolation: OS sandbox where available, write detection everywhere.
-        sandbox = make_sandbox(project, collected_dir)
+        sandbox = make_sandbox(project, collected_dir, validator=validator)
         if gate_spec is not None:
             gate_spec["exec_prefix"] = list(sandbox["prefix"])
             gate_spec["exec_deny"] = list(sandbox["deny"]) if sandbox["prefix"] else []

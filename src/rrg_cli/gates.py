@@ -29,9 +29,11 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+from .metrics import PUBLIC_SPEC_SCHEMA, validate_public_metric_specs
 from .normalize import IMAGE_EXTENSIONS, _extract_q_number
 
 HARD = "hard"
@@ -130,19 +132,26 @@ class GateResult:
         return f"FAIL — {len(self.hard)} blocking violation(s), {len(self.soft)} advisory."
 
     def feedback(self, attempt: int, max_revisions: int) -> str:
-        """Model-facing revision turn. Filenames, keys, and codes only — nothing else."""
+        """Model-facing revision turn. Codes and artifact coordinates only.
+
+        The operator observation may contain useful diagnostics, but this rendering never
+        repeats observed values or report prose.  In particular, it cannot become an
+        origin-comparison oracle: the gate process never loads the held-back origin file.
+        """
         found = (
             f"{len(self.hard)} blocking structural problem(s) and {len(self.soft)} advisory deviation(s)"
             if self.hard else f"{len(self.soft)} advisory deviation(s) from the required shape"
         )
         lines = [
-            f"## Deliverable structure check — revision {attempt} of {max_revisions}",
+            f"## Deterministic deliverable check — revision {attempt} of {max_revisions}",
             "",
-            f"An automated check of your output found {found}. Fix the STRUCTURE only: rename, "
-            "move, add, or repair the files listed below so they match the required names, "
-            "locations, and shapes. Do not re-run the analysis, change any statistic or "
-            "conclusion, or alter the methodology. Keep every existing file; add or rename "
-            "rather than delete. If an advisory item genuinely does not apply, leave it and say why.",
+            f"An automated check of your output found {found}. Repair only the coded artifacts "
+            "below. Structural codes require naming/shape repairs. Metric, arithmetic, unit, "
+            "and DYFA-consistency codes require you to recompute or transcribe from your own "
+            "scripts and returned data, then make your own artifacts agree. Do not search for "
+            "or infer any withheld comparison result, and do not change the methodology. If an "
+            "advisory item genuinely does not apply, leave it and say why. Do not re-run the analysis "
+            "for a structural-only code.",
             "",
             f"Output root checked: `{self.root}`",
             "",
@@ -172,7 +181,8 @@ class GateResult:
             questions = sorted({v.question for v in group if v.question is not None})
             if len(questions) >= collapse_at and len(questions) == len(group):
                 qs = ", ".join(f"Q{q}" for q in questions)
-                collapsed.append(f"- [{code}] on {qs} — e.g. {group[0].message}")
+                target = group[0].path or group[0].expected or "declared deliverable"
+                collapsed.append(f"- [{code}] on {qs} — repair `{target}`")
             else:
                 remaining.extend(group)
         if collapsed:
@@ -185,10 +195,10 @@ class GateResult:
         for q in sorted(by_q, key=lambda k: (k is None, k or 0)):
             out.append(f"**{'General' if q is None else f'Q{q}'}**")
             for v in by_q[q]:
-                line = f"- [{v.code}] {v.message}"
-                if v.expected and v.expected not in v.message:
-                    shown = v.expected if "`" in v.expected else f"`{v.expected}`"
-                    line += f" → expected {shown}"
+                target = v.path or v.expected or "declared deliverable"
+                line = f"- [{v.code}] repair `{target}`"
+                if v.expected and v.expected != target:
+                    line += f" to match `{v.expected}`"
                 out.append(line)
             out.append("")
         return out
@@ -328,6 +338,186 @@ def _to_number(value: Any) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     return None
+
+
+_MISSING = object()
+_BASE_SUMMARY_KEYS = set(REQUIRED_SUMMARY_KEYS) | {"_units"}
+_METRIC_MARKER_RE = re.compile(
+    r"`(?P<id>[A-Za-z][A-Za-z0-9_.-]*)\s*=\s*(?P<value>null|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s+(?P<unit>[A-Za-z0-9_.%/-]+)`",
+    re.IGNORECASE,
+)
+
+
+def _path_value(value: dict[str, Any], dotted: str) -> Any:
+    current: Any = value
+    for part in dotted.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return _MISSING
+        current = current[part]
+    return current
+
+
+def _decimal(value: Any) -> Decimal | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        result = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    return result if result.is_finite() else None
+
+
+def _numeric_leaf_paths(value: Any, prefix: str = "") -> set[str]:
+    found: set[str] = set()
+    if isinstance(value, dict):
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if path == "_units" or path.startswith("_units."):
+                continue
+            if isinstance(child, dict):
+                found.update(_numeric_leaf_paths(child, path))
+            elif _decimal(child) is not None or child is None:
+                found.add(path)
+    return found
+
+
+def _load_public_metric_contract(work_dir: Path, root: Path) -> dict[str, Any] | None:
+    """Load only the validator-visible contract, never the operator origin contract."""
+    candidates = [work_dir / "METRIC_SPEC.json", root / "METRIC_SPEC.json"]
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return {"_invalid": True, "_path": _rel(work_dir, path)}
+        if not isinstance(value, dict) or validate_public_metric_specs(value):
+            return {"_invalid": True, "_path": _rel(work_dir, path)}
+        return value
+    return None
+
+
+def _check_metric_contract(
+    root: Path,
+    n: int,
+    summary_path: Path | None,
+    report_section: str | None,
+    question_spec: dict[str, Any],
+    out: list[GateViolation],
+) -> None:
+    if summary_path is None:
+        return
+    rel = _rel(root, summary_path)
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return  # the ordinary summary gate owns this violation
+    if not isinstance(summary, dict):
+        return
+    metrics = question_spec.get("metrics", [])
+    if not isinstance(metrics, list):
+        return
+    units = summary.get("_units")
+    units = units if isinstance(units, dict) else {}
+    by_id: dict[str, dict[str, Any]] = {}
+    declared_paths: set[str] = set()
+    values: dict[str, Any] = {}
+    for metric in metrics:
+        if not isinstance(metric, dict):
+            continue
+        metric_id = str(metric.get("id", ""))
+        path = str(metric.get("validator_path", ""))
+        by_id[metric_id] = metric
+        declared_paths.add(path)
+        value = _path_value(summary, path)
+        values[metric_id] = value
+        if value is _MISSING:
+            out.append(GateViolation(
+                "METRIC_MISSING", f"`{rel}` lacks declared metric `{metric_id}`",
+                HARD, n, rel, f"metric `{metric_id}` at `{path}`",
+            ))
+        elif value is None:
+            if not metric.get("nullable", False):
+                out.append(GateViolation(
+                    "METRIC_NULL_NOT_ALLOWED", f"`{rel}` metric `{metric_id}` may not be null",
+                    HARD, n, rel, f"numeric metric `{metric_id}`",
+                ))
+        elif _decimal(value) is None:
+            out.append(GateViolation(
+                "METRIC_BAD_TYPE", f"`{rel}` metric `{metric_id}` must be a finite JSON number",
+                HARD, n, rel, f"numeric metric `{metric_id}`",
+            ))
+        elif metric.get("kind") == "count" and Decimal(str(value)) != Decimal(str(value)).to_integral_value():
+            out.append(GateViolation(
+                "METRIC_BAD_TYPE", f"`{rel}` count metric `{metric_id}` must be an integer",
+                HARD, n, rel, f"integer metric `{metric_id}`",
+            ))
+        if metric_id not in units:
+            out.append(GateViolation(
+                "METRIC_UNIT_MISSING", f"`{rel}` lacks `_units.{metric_id}`",
+                HARD, n, rel, f"`_units.{metric_id}`",
+            ))
+        elif units[metric_id] != metric.get("unit"):
+            out.append(GateViolation(
+                "METRIC_UNIT_MISMATCH", f"`{rel}` declares the wrong unit for `{metric_id}`",
+                HARD, n, rel, f"contract unit for `{metric_id}`",
+            ))
+
+    allowed_numeric = declared_paths | (_BASE_SUMMARY_KEYS - {"_units"})
+    for path in sorted(_numeric_leaf_paths(summary) - allowed_numeric):
+        out.append(GateViolation(
+            "METRIC_EXTRA", f"`{rel}` contains undeclared numeric metric `{path}`",
+            HARD, n, rel, f"declare `{path}` in METRIC_SPEC.json or remove it",
+        ))
+
+    for relation in question_spec.get("relations", []) or []:
+        if not isinstance(relation, dict):
+            continue
+        input_values = [values.get(str(item), _MISSING) for item in relation.get("inputs", [])]
+        output_value = values.get(str(relation.get("output")), _MISSING)
+        if any(value is _MISSING or value is None or _decimal(value) is None for value in [*input_values, output_value]):
+            continue
+        decimals = [_decimal(value) for value in input_values]
+        actual = _decimal(output_value)
+        if relation.get("op") == "sum_equals":
+            expected = sum((value for value in decimals if value is not None), Decimal(0))
+        elif relation.get("op") == "difference_equals" and len(decimals) == 2:
+            expected = decimals[0] - decimals[1]  # type: ignore[operator]
+        else:
+            continue
+        if actual != expected:
+            out.append(GateViolation(
+                "ARITHMETIC_MISMATCH", f"`{rel}` violates relation `{relation.get('id')}`",
+                HARD, n, rel, f"relation `{relation.get('id')}`",
+            ))
+
+    markers = {
+        match.group("id"): (match.group("value").lower(), match.group("unit"))
+        for match in _METRIC_MARKER_RE.finditer(report_section or "")
+    }
+    for metric_id, metric in by_id.items():
+        value = values.get(metric_id, _MISSING)
+        if value is _MISSING:
+            continue
+        marker = markers.get(metric_id)
+        if marker is None:
+            out.append(GateViolation(
+                "DYFA_METRIC_MISSING", f"DYFA section lacks metric marker `{metric_id}`",
+                HARD, n, rel, f"`{metric_id}=<value> {metric.get('unit')}`",
+            ))
+            continue
+        shown, shown_unit = marker
+        same_value = (value is None and shown == "null")
+        if value is not None and shown != "null":
+            try:
+                same_value = Decimal(shown) == Decimal(str(value))
+            except InvalidOperation:
+                same_value = False
+        if not same_value or shown_unit != metric.get("unit"):
+            out.append(GateViolation(
+                "DYFA_METRIC_MISMATCH", f"DYFA metric marker `{metric_id}` disagrees with `{rel}`",
+                HARD, n, rel, f"same value and unit as `{metric_id}` in `{rel}`",
+            ))
 
 
 def _question_matches(value: Any, n: int) -> bool:
@@ -503,7 +693,7 @@ def _check_summary(root: Path, n: int, path: Path | None, out: list[GateViolatio
             "SUMMARY_BAD_TYPE", f"`{rel}` key `conclusion` must be a non-empty one-sentence string",
             HARD, n, rel, "`conclusion`: \"<one sentence>\"",
         ))
-    nested = sorted(k for k, v in data.items() if isinstance(v, dict))
+    nested = sorted(k for k, v in data.items() if isinstance(v, dict) and k != "_units")
     if nested:
         out.append(GateViolation(
             "SUMMARY_NOT_FLAT",
@@ -836,6 +1026,14 @@ def check_gates(
         report_name=report_name,
     )
     out = result.violations
+    metric_contract = _load_public_metric_contract(work_dir, root)
+    if metric_contract and metric_contract.get("_invalid"):
+        out.append(GateViolation(
+            "INVALID_METRIC_SPEC", "validator-visible METRIC_SPEC.json is invalid",
+            HARD, None, str(metric_contract.get("_path") or "METRIC_SPEC.json"),
+            f"schema `{PUBLIC_SPEC_SCHEMA}`",
+        ))
+        metric_contract = None
 
     if question_count < 1:
         out.append(GateViolation(
@@ -876,6 +1074,18 @@ def check_gates(
         _check_summary(root, n, present.get("summary"), out)
         _check_scripts(root, n, present, out)
         _check_report_section(n, report_rel, report_text, out)
+        if metric_contract is not None:
+            question_spec = (metric_contract.get("questions", {}) or {}).get(str(n))
+            if not isinstance(question_spec, dict):
+                out.append(GateViolation(
+                    "METRIC_SPEC_QUESTION_MISSING", f"METRIC_SPEC.json lacks Q{n}",
+                    HARD, n, "METRIC_SPEC.json", f"questions.{n}",
+                ))
+            else:
+                _check_metric_contract(
+                    root, n, present.get("summary"), _section_for(report_text, n),
+                    question_spec, out,
+                )
         figure_ok = all(present.get(k) is not None for k in ("fig_py", "fig_png", "raw_csv")) and not any(
             v.severity == HARD and v.code in {"INVALID_PNG", "EMPTY_FILE", "FIG_SCRIPT_NO_CSV_READ", "FIG_SCRIPT_NO_PNG_WRITE"}
             for v in out[before:]

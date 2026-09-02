@@ -1007,9 +1007,12 @@ def _generate_study_yaml(
       machine-readable `raw/Q<n>_summary.json`, a single flat JSON object that always
       includes the keys `question`, `n` (analysis N), `test` (method name), `statistic`,
       `p_value` (the exact value, never a rounded 0), `effect_size` (null if not
-      applicable), and `conclusion` (one sentence) — add extra keys as the question
-      needs; (4) a report section in DYFA format labelled `D - Do`, `Y - Why`, `F - Find`,
-      `A - Answer`, embedding `Q<n>_fig.png`. Also write `RAW.md` and `SUMMARY.md`
+      applicable), and `conclusion` (one sentence). Emit every numeric result declared
+      in `METRIC_SPEC.json`, no undeclared numeric result, and an `_units` object mapping
+      every metric id to its exact contract unit. (4) a report section in DYFA format
+      labelled `D - Do`, `Y - Why`, `F - Find`, `A - Answer`, embedding `Q<n>_fig.png`.
+      In F or A, repeat each declared metric as the exact backticked marker
+      `<metric_id>=<value-or-null> <unit>`. Also write `RAW.md` and `SUMMARY.md`
       indexing the per-question artifacts. Before finishing, confirm every question has
       all four — script+csv, fig+png, summary.json, and a DYFA section — and that no
       `raw/Q<n>_summary.json` is missing.
@@ -1272,6 +1275,9 @@ def _generate_validation_instructions(manifest: dict, analysis_name: str, df: pd
         "- Report every derived analysis N.",
         "- Treat `__RRG_NA__` as missing in CSV format.",
         "- Read `METRIC_SPEC.json` and emit every listed validator path with the specified unit.",
+        "- Add `_units` keyed by metric id, and transcribe each metric in DYFA F or A as `<metric_id>=<value-or-null> <unit>`.",
+        "- Emit no undeclared numeric results; result annotations may be non-numeric.",
+        "- Treat declared metric relations as exact internal identities.",
         "- Do not invent a tolerance; comparison policy is operator-owned and withheld.",
         "",
         "## Result-neutral reporting guidance",
