@@ -22,7 +22,12 @@ Design rules:
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import subprocess
+import sys
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,6 +36,12 @@ from .normalize import IMAGE_EXTENSIONS, _extract_q_number
 
 HARD = "hard"
 SOFT = "soft"
+
+# Evidence from the executable gate lives here inside the deliverable root. It is never a
+# deliverable itself and is excluded from near-miss detection.
+EVIDENCE_DIR = "_gates"
+EXEC_TIMEOUT = 120        # seconds per figure script
+EXEC_TOTAL_TIMEOUT = 600  # seconds across all figure scripts in one gate pass
 
 REQUIRED_SUMMARY_KEYS: tuple[str, ...] = (
     "question", "n", "test", "statistic", "p_value", "effect_size", "conclusion",
@@ -76,6 +87,7 @@ class GateResult:
     question_count: int
     report_name: str
     violations: list[GateViolation] = field(default_factory=list)
+    exec_info: dict[str, Any] = field(default_factory=dict)
 
     @property
     def hard(self) -> list[GateViolation]:
@@ -107,6 +119,7 @@ class GateResult:
             "soft_count": len(self.soft),
             "hard": [v.as_dict() for v in self.hard],
             "soft": [v.as_dict() for v in self.soft],
+            "exec": self.exec_info,
         }
 
     def summary_line(self) -> str:
@@ -229,7 +242,7 @@ def gate_record(result: "GateResult", *, source: str) -> dict[str, Any]:
 
 
 def _has_q_files(folder: Path) -> int:
-    if not folder.is_dir():
+    if not folder.is_dir() or folder.name == EVIDENCE_DIR:
         return 0
     return sum(
         1 for p in folder.iterdir()
@@ -255,7 +268,7 @@ def locate_deliverable_root(work_dir: Path, output_folder: str | None = None) ->
     best: Path | None = None
     best_count = 0
     for folder in sorted(p for p in work_dir.rglob("*") if p.is_dir()):
-        if folder.name in {"raw", "__pycache__", ".git"} or any(part.startswith(".") for part in folder.relative_to(work_dir).parts):
+        if folder.name in {"raw", "__pycache__", ".git", EVIDENCE_DIR} or any(part.startswith(".") for part in folder.relative_to(work_dir).parts):
             continue
         count = _has_q_files(folder)
         if count > best_count:
@@ -299,7 +312,7 @@ def _candidates(root: Path) -> dict[tuple[int, str], list[Path]]:
     """All question-numbered files in the tree, keyed by (question, kind)."""
     found: dict[tuple[int, str], list[Path]] = {}
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.name == ".DS_Store" or "__pycache__" in path.parts:
+        if not path.is_file() or path.name == ".DS_Store" or "__pycache__" in path.parts or EVIDENCE_DIR in path.parts:
             continue
         q = _extract_q_number(path.name)
         kind = _classify(path)
@@ -562,14 +575,236 @@ def _check_report_section(
         ))
 
 
+# ---------------------------------------------------------------------------
+# Executable figure gate
+# ---------------------------------------------------------------------------
+#
+# The static checks prove a figure script *names* its CSV and PNG. Running it proves it
+# *produces* the delivered PNG from that CSV — the file-system analogue of a harness
+# rendering the compiled spec. The delivered PNG is moved aside, the script is run in
+# the deliverable root (under the same OS sandbox as the validator, when given), the
+# regenerated PNG is compared byte-wise and then pixel-wise, and the delivered PNG is
+# always restored. Identical → the regenerated copy is discarded. Different → it is kept
+# under `_gates/` as evidence and the question fails.
+
+_PROBE = "import matplotlib, pandas"
+_PROBE_CACHE: dict[str, bool] = {}  # interpreter path -> imports the validator stack
+
+
+def _probe(exe: str) -> bool:
+    if exe not in _PROBE_CACHE:
+        try:
+            result = subprocess.run([exe, "-c", _PROBE], capture_output=True, timeout=90)
+            _PROBE_CACHE[exe] = result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            _PROBE_CACHE[exe] = False
+    return _PROBE_CACHE[exe]
+
+
+def resolve_gate_python(work_dir: str | Path, preferred: str = "") -> tuple[str | None, str]:
+    """The interpreter to run figure scripts with: (path or None, note).
+
+    Order: the configured ``gate_python``; a ``.venv`` the validator built in the work dir;
+    then ``python3``, ``/usr/bin/python3`` and this process's interpreter — the first that
+    imports matplotlib and pandas wins. The scripts are validator code and need the
+    validator's stack, which this process's venv may not carry.
+    """
+    candidates: list[str] = []
+    if preferred:
+        candidates.append(preferred)
+    venv = Path(work_dir) / ".venv" / "bin" / "python"
+    if venv.exists():
+        candidates.append(str(venv))
+    candidates += ["python3", "/usr/bin/python3", sys.executable]
+    tried: list[str] = []
+    for candidate in candidates:
+        exe = candidate if os.path.isabs(candidate) else shutil.which(candidate)
+        if not exe or not os.path.exists(exe) or exe in tried:
+            continue
+        tried.append(exe)
+        if _probe(exe):
+            return exe, f"probed {len(tried)} interpreter(s)"
+    return None, "no interpreter imports matplotlib and pandas; tried " + ", ".join(tried)
+
+
+# Fraction of pixels allowed to differ before a regenerated figure counts as a different
+# figure. Calibrated on 22 real figures re-rendered under a different matplotlib
+# (3.10.6 → 3.9.4): identical layout, 2–6 % of pixels changed by text anti-aliasing.
+DRIFT_TOLERANCE = 0.15
+
+
+def _png_compare(a: Path, b: Path) -> tuple[str, str]:
+    """Compare a delivered PNG with its regeneration.
+
+    Returns ``("identical", …)`` when bytes or pixels match, ``("drift", …)`` when the
+    dimensions match and fewer than :data:`DRIFT_TOLERANCE` of pixels differ (a different
+    renderer, same figure), else ``("mismatch", …)``.
+    """
+    try:
+        if a.read_bytes() == b.read_bytes():
+            return "identical", "bytes identical"
+    except OSError:
+        return "mismatch", "unreadable"
+    try:
+        from PIL import Image
+        import numpy as np
+    except ImportError:  # pragma: no cover - both are dependencies
+        return "mismatch", "bytes differ; Pillow/numpy unavailable for pixel comparison"
+    try:
+        with Image.open(a) as ia, Image.open(b) as ib:
+            if ia.size != ib.size:
+                return "mismatch", f"size {ia.size[0]}x{ia.size[1]} vs {ib.size[0]}x{ib.size[1]}"
+            pa = np.asarray(ia.convert("RGB"), dtype=np.int16)
+            pb = np.asarray(ib.convert("RGB"), dtype=np.int16)
+    except Exception as exc:
+        return "mismatch", f"bytes differ and pixels could not be compared ({exc.__class__.__name__})"
+    differing = float((np.abs(pa - pb).max(axis=2) > 0).mean())
+    if differing == 0:
+        return "identical", "pixels identical"
+    if differing <= DRIFT_TOLERANCE:
+        return "drift", f"{differing:.1%} of pixels differ (renderer drift, same figure)"
+    return "mismatch", f"{differing:.1%} of pixels differ"
+
+
+def _run_figure_script(
+    root: Path, n: int, python: str, timeout: int, prefix: list[str], out: list[GateViolation],
+) -> str:
+    """Regenerate Q<n>_fig.png in place. Returns one of: identical, mismatch, failed,
+    timeout, missing, env."""
+    fig_py = root / f"Q{n}_fig.py"
+    png = root / f"Q{n}_fig.png"
+    evidence = root / EVIDENCE_DIR
+    evidence.mkdir(exist_ok=True)
+    aside = evidence / f"Q{n}_fig.delivered.png"
+    png.replace(aside)
+    status = "failed"
+    try:
+        env = {**os.environ, "MPLBACKEND": "Agg"}
+        try:
+            proc = subprocess.run(
+                [*prefix, python, fig_py.name], cwd=root, capture_output=True, text=True,
+                timeout=timeout, env=env,
+            )
+        except subprocess.TimeoutExpired:
+            out.append(GateViolation(
+                "FIG_SCRIPT_TIMEOUT", f"`Q{n}_fig.py` did not finish within {timeout}s",
+                HARD, n, f"Q{n}_fig.py", f"`python Q{n}_fig.py` writes Q{n}_fig.png in under {timeout}s",
+            ))
+            return "timeout"
+        if proc.returncode != 0:
+            tail = " | ".join(line for line in proc.stderr.strip().splitlines()[-3:])[:300]
+            (evidence / f"Q{n}_fig.stderr.txt").write_text(proc.stderr, encoding="utf-8")
+            if "ModuleNotFoundError" in proc.stderr or "ImportError" in proc.stderr:
+                out.append(GateViolation(
+                    "FIG_SCRIPT_ENV_MISSING",
+                    f"`Q{n}_fig.py` needs a module the gate interpreter lacks ({tail})",
+                    SOFT, n, f"Q{n}_fig.py", "a script that runs with matplotlib + pandas",
+                ))
+                return "env"
+            out.append(GateViolation(
+                "FIG_SCRIPT_FAILED", f"`Q{n}_fig.py` exited {proc.returncode}: {tail}",
+                HARD, n, f"Q{n}_fig.py", f"`python Q{n}_fig.py` runs cleanly from the output root",
+            ))
+            return "failed"
+        if not png.is_file():
+            out.append(GateViolation(
+                "FIG_NOT_REGENERATED", f"`Q{n}_fig.py` ran but did not write `Q{n}_fig.png`",
+                HARD, n, f"Q{n}_fig.py", f"Q{n}_fig.png",
+            ))
+            return "missing"
+        verdict, how = _png_compare(aside, png)
+        if verdict == "identical":
+            png.unlink()
+            return "identical"
+        if verdict == "drift":
+            png.unlink()
+            out.append(GateViolation(
+                "FIG_RENDER_DRIFT",
+                f"`Q{n}_fig.py` reproduces `Q{n}_fig.png` up to renderer differences ({how})",
+                SOFT, n, f"Q{n}_fig.png", None,
+            ))
+            return "drift"
+        regenerated = evidence / f"Q{n}_fig.regenerated.png"
+        png.replace(regenerated)
+        out.append(GateViolation(
+            "FIG_MISMATCH",
+            f"running `Q{n}_fig.py` produced a different `Q{n}_fig.png` than delivered ({how}); "
+            f"the delivered figure must be exactly what the script writes from raw/Q{n}_raw.csv",
+            HARD, n, f"Q{n}_fig.png", f"Q{n}_fig.png == output of Q{n}_fig.py",
+        ))
+        return "mismatch"
+    finally:
+        if png.exists() and png != aside:
+            png.unlink()
+        aside.replace(png)
+        try:
+            evidence.rmdir()  # only succeeds when no evidence was kept
+        except OSError:
+            pass
+
+
+def run_figure_gate(
+    root: Path,
+    questions: list[int],
+    *,
+    python: str | None,
+    timeout: int = EXEC_TIMEOUT,
+    total_timeout: int = EXEC_TOTAL_TIMEOUT,
+    prefix: list[str] | None = None,
+    out: list[GateViolation],
+) -> dict[str, Any]:
+    info: dict[str, Any] = {
+        "python": python, "attempted": [], "identical": [], "drift": [], "results": {}, "skipped": [],
+    }
+    if not questions:
+        return info
+    if python is None:
+        out.append(GateViolation(
+            "NO_GATE_INTERPRETER",
+            "figure scripts were not executed: no interpreter with matplotlib and pandas was found "
+            "(set the `gate_python` pref)",
+            SOFT, None, None, "gate_python pref pointing at the validator's Python",
+        ))
+        info["skipped"] = list(questions)
+        return info
+    started = time.monotonic()
+    for n in questions:
+        if time.monotonic() - started > total_timeout:
+            info["skipped"].append(n)
+            out.append(GateViolation(
+                "FIG_EXEC_SKIPPED", f"`Q{n}_fig.py` was not executed: gate time budget ({total_timeout}s) exhausted",
+                SOFT, n, f"Q{n}_fig.py", None,
+            ))
+            continue
+        info["attempted"].append(n)
+        status = _run_figure_script(root, n, python, timeout, prefix or [], out)
+        info["results"][str(n)] = status
+        if status == "identical":
+            info["identical"].append(n)
+        elif status == "drift":
+            info["drift"].append(n)
+    return info
+
+
 def check_gates(
     work_dir: str | Path,
     question_count: int,
     report_name: str = "",
     *,
     output_folder: str | None = None,
+    exec_figures: bool = False,
+    exec_python: str | None = None,
+    exec_timeout: int = EXEC_TIMEOUT,
+    exec_total_timeout: int = EXEC_TOTAL_TIMEOUT,
+    exec_prefix: list[str] | None = None,
 ) -> GateResult:
-    """Run every deliverable gate against a validator's output tree."""
+    """Run every deliverable gate against a validator's output tree.
+
+    With ``exec_figures``, questions whose static figure checks pass also have their
+    figure script executed (see :func:`run_figure_gate`). ``exec_python`` is the
+    interpreter to use (resolved via :func:`resolve_gate_python` when None) and
+    ``exec_prefix`` an argv prefix such as an OS sandbox wrapper.
+    """
     work_dir = Path(work_dir)
     root = locate_deliverable_root(work_dir, output_folder)
     result = GateResult(
@@ -610,11 +845,29 @@ def check_gates(
             ))
 
     candidates = _candidates(root)
+    executable: list[int] = []
     for n in range(1, question_count + 1):
+        before = len(out)
         present = _check_file_presence(root, n, candidates, out)
         _check_png(root, n, present.get("fig_png"), out)
         _check_summary(root, n, present.get("summary"), out)
         _check_scripts(root, n, present, out)
         _check_report_section(n, report_rel, report_text, out)
+        figure_ok = all(present.get(k) is not None for k in ("fig_py", "fig_png", "raw_csv")) and not any(
+            v.severity == HARD and v.code in {"INVALID_PNG", "EMPTY_FILE", "FIG_SCRIPT_NO_CSV_READ", "FIG_SCRIPT_NO_PNG_WRITE"}
+            for v in out[before:]
+        )
+        if figure_ok:
+            executable.append(n)
 
+    if exec_figures:
+        python = exec_python
+        note = "given"
+        if python is None:
+            python, note = resolve_gate_python(work_dir)
+        result.exec_info = run_figure_gate(
+            root, executable, python=python, timeout=exec_timeout,
+            total_timeout=exec_total_timeout, prefix=exec_prefix, out=out,
+        )
+        result.exec_info["interpreter_note"] = note
     return result

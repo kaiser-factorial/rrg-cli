@@ -13,6 +13,7 @@ from rrg_cli.prefs import coerce_pref, save_prefs
 from rrg_cli.project import Project
 
 REPORT = "ReplicationModel_Report.md"
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
 
 def _summary(n: int, **overrides) -> dict:
@@ -28,9 +29,15 @@ def _write_conforming(root: Path, n_questions: int = 3, report_name: str = REPOR
     (root / "raw").mkdir(parents=True, exist_ok=True)
     sections = []
     for n in range(1, n_questions + 1):
-        (root / f"Q{n}_analysis.py").write_text(f"# writes raw/Q{n}_raw.csv\n")
-        (root / f"Q{n}_fig.py").write_text(f"# reads raw/Q{n}_raw.csv, writes Q{n}_fig.png\n")
-        (root / f"Q{n}_fig.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
+        # Real, runnable scripts: the executable gate re-runs Q<n>_fig.py and expects the
+        # delivered PNG back.
+        (root / f"Q{n}_analysis.py").write_text(
+            f"open('raw/Q{n}_raw.csv', 'w').write('a,b\\n1,2\\n')\n"
+        )
+        (root / f"Q{n}_fig.py").write_text(
+            f"open('raw/Q{n}_raw.csv').read()\nopen('Q{n}_fig.png', 'wb').write({PNG!r})\n"
+        )
+        (root / f"Q{n}_fig.png").write_bytes(PNG)
         (root / "raw" / f"Q{n}_raw.csv").write_text("a,b\n1,2\n")
         (root / "raw" / f"Q{n}_summary.json").write_text(json.dumps(_summary(n)))
         sections.append(
@@ -200,6 +207,80 @@ def test_feedback_is_built_from_names_and_codes_only(tmp_path: Path) -> None:
 def test_observation_is_json_serializable(tmp_path: Path) -> None:
     result = check_gates(tmp_path, 1, REPORT)
     json.dumps(result.as_observation())
+
+
+# --- Executable figure gate --------------------------------------------------
+
+import sys
+
+
+def _fig_script(body: str) -> str:
+    # Every script names raw/Q1_raw.csv and Q1_fig.png so the static gate lets it run.
+    return "import sys\nopen('raw/Q1_raw.csv').read()\n" + body + "\n# writes Q1_fig.png\n"
+
+
+def test_exec_gate_identical_output_leaves_no_evidence(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 1)
+    (tmp_path / "Q1_fig.py").write_text(_fig_script(f"open('Q1_fig.png','wb').write({PNG!r})"))
+    result = check_gates(tmp_path, 1, REPORT, exec_figures=True, exec_python=sys.executable)
+    assert result.clean, [v.code for v in result.violations]
+    assert result.exec_info["identical"] == [1] and result.exec_info["results"] == {"1": "identical"}
+    assert not (tmp_path / "_gates").exists()
+    assert (tmp_path / "Q1_fig.png").read_bytes() == PNG
+
+
+def test_exec_gate_mismatch_keeps_evidence_and_restores_original(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 1)
+    other = PNG[:-1] + b"\x01"
+    (tmp_path / "Q1_fig.py").write_text(_fig_script(f"open('Q1_fig.png','wb').write({other!r})"))
+    result = check_gates(tmp_path, 1, REPORT, exec_figures=True, exec_python=sys.executable)
+    assert [v.code for v in result.hard] == ["FIG_MISMATCH"]
+    assert (tmp_path / "Q1_fig.png").read_bytes() == PNG            # delivered file untouched
+    assert (tmp_path / "_gates" / "Q1_fig.regenerated.png").read_bytes() == other
+
+
+def test_exec_gate_failure_and_missing_output(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 2)
+    (tmp_path / "Q1_fig.py").write_text(_fig_script("raise SystemExit('boom')"))
+    (tmp_path / "Q2_fig.py").write_text("open('raw/Q2_raw.csv')\n# Q2_fig.png never written\n")
+    result = check_gates(tmp_path, 2, REPORT, exec_figures=True, exec_python=sys.executable)
+    codes = {(v.question, v.code) for v in result.hard}
+    assert codes == {(1, "FIG_SCRIPT_FAILED"), (2, "FIG_NOT_REGENERATED")}
+    assert (tmp_path / "_gates" / "Q1_fig.stderr.txt").read_text().strip() == "boom"
+    for n in (1, 2):
+        assert (tmp_path / f"Q{n}_fig.png").read_bytes().startswith(b"\x89PNG")
+
+
+def test_exec_gate_missing_module_is_advisory(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 1)
+    (tmp_path / "Q1_fig.py").write_text(_fig_script("import definitely_not_installed_xyz"))
+    result = check_gates(tmp_path, 1, REPORT, exec_figures=True, exec_python=sys.executable)
+    assert result.passed and _codes(result, "soft") == ["FIG_SCRIPT_ENV_MISSING"]
+
+
+def test_exec_gate_timeout(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 1)
+    (tmp_path / "Q1_fig.py").write_text(_fig_script("import time; time.sleep(5)"))
+    result = check_gates(tmp_path, 1, REPORT, exec_figures=True, exec_python=sys.executable, exec_timeout=1)
+    assert [v.code for v in result.hard] == ["FIG_SCRIPT_TIMEOUT"]
+    assert (tmp_path / "Q1_fig.png").read_bytes() == PNG
+
+
+def test_exec_gate_skips_questions_that_failed_static_checks(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 2)
+    (tmp_path / "Q1_fig.py").write_text(_fig_script(f"open('Q1_fig.png','wb').write({PNG!r})"))
+    (tmp_path / "Q2_fig.png").write_bytes(b"not a png")
+    result = check_gates(tmp_path, 2, REPORT, exec_figures=True, exec_python=sys.executable)
+    assert result.exec_info["attempted"] == [1]
+    assert (2, "INVALID_PNG") in {(v.question, v.code) for v in result.hard}
+
+
+def test_exec_gate_without_interpreter_is_advisory(tmp_path: Path) -> None:
+    _write_conforming(tmp_path, 1)
+    with patch("rrg_cli.gates.resolve_gate_python", return_value=(None, "none")):
+        result = check_gates(tmp_path, 1, REPORT, exec_figures=True)
+    assert result.passed and _codes(result, "soft") == ["NO_GATE_INTERPRETER"]
+    assert result.exec_info["skipped"] == [1]
 
 
 # --- Dispatch revision loop --------------------------------------------------

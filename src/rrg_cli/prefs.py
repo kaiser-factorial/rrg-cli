@@ -24,11 +24,15 @@ DEFAULTS: dict[str, Any] = {
     "auto_import": True,         # auto-import after dispatch completes?
     "gates": True,               # run deterministic deliverable gates after the validator finishes?
     "gate_revisions": 1,         # how many revision turns a failing gate may trigger (0 = report only)
+    "gate_exec": True,           # execute each Q<n>_fig.py and require it to reproduce Q<n>_fig.png (dispatch only)
+    "gate_python": "",           # interpreter for gate_exec; empty = auto-detect one with matplotlib + pandas
 }
 
 # Known pref keys (for validation in CLI/TUI)
-PREF_KEYS: tuple[str, ...] = ("validator", "mode", "skip_normalize", "auto_import", "gates", "gate_revisions")
-BOOL_PREF_KEYS: tuple[str, ...] = ("skip_normalize", "auto_import", "gates")
+PREF_KEYS: tuple[str, ...] = (
+    "validator", "mode", "skip_normalize", "auto_import", "gates", "gate_revisions", "gate_exec", "gate_python",
+)
+BOOL_PREF_KEYS: tuple[str, ...] = ("skip_normalize", "auto_import", "gates", "gate_exec")
 INT_PREF_KEYS: tuple[str, ...] = ("gate_revisions",)
 
 
