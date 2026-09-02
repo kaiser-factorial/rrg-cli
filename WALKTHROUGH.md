@@ -274,16 +274,23 @@ rrg dispatch --stage replication --model "Qwen 3.7 Max" --validator hermes
 `agent` (built-in operator responses drive the discuss loop)
 
 The dispatch command:
-1. Builds the blinded package zip (blinding lint blocks if secrets leak)
-2. Extracts it to a temp dir outside the project (isolation)
-3. Sends the prompt turns to the validator via the chosen CLI
+1. Builds the blinded package zip (blinding lint blocks if secrets leak); the
+   published package dir is made read-only
+2. Extracts it to a temp dir outside the project and snapshots the project tree
+3. Sends the prompt turns to the validator via the chosen CLI, under an OS sandbox
+   that denies the project tree (macOS); the first turn starts with the absolute
+   working directory and a file inventory
 4. Runs the deterministic deliverable gates on the work dir; if the structure
    deviates (misnamed files, missing summary keys, `p_value: 0`, missing DYFA
-   labels, ...) it sends the coded violation list back as a revision turn and
-   re-checks, up to `--gate-revisions N` times (default 1; `--no-gates` to skip)
-5. Auto-imports the validator's output back into the project, writing `GATES.json`
-6. Auto-normalizes non-conforming file names
-7. Checks for blinding breaches (hash comparison against the answer key)
+   labels, a figure script that does not reproduce its PNG, ...) it sends the coded
+   violation list back as a revision turn and re-checks, up to `--gate-revisions N`
+   times (default 1; `--no-gates` to skip, `--no-exec-gates` to skip running scripts)
+5. Re-snapshots the project tree; anything the validator changed inside it is an
+   isolation breach (blocking grading) and files dropped into the package are
+   quarantined into the run
+6. Auto-imports the validator's output back into the project, writing `GATES.json`
+7. Auto-normalizes non-conforming file names
+8. Checks for blinding breaches (hash comparison against the answer key)
 
 Exit code `3` means the gates still failed after the last revision — the files were
 imported anyway; read `GATES.json` in the run folder for the remaining violations.

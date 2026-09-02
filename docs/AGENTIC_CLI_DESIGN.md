@@ -352,6 +352,31 @@ gets a bounded number of revisions, and every attempt is recorded.
 Run-level: `MISSING_REPORT` (hard), `REPORT_MISNAMED` (soft, found under a fallback
 name), `MISSING_INDEX` (hard, `RAW.md` / `SUMMARY.md`), `NO_QUESTION_COUNT` (soft).
 
+### Executable figure gate (`exec_figures`)
+
+For each question whose static figure checks pass, `Q<n>_fig.py` is executed in the
+deliverable root (cwd, `MPLBACKEND=Agg`, under the dispatch's sandbox prefix, per-script
+timeout 120 s, 600 s total budget) with the delivered PNG moved aside; the delivered PNG
+is always restored.
+
+| Code | Severity | Trigger |
+|---|---|---|
+| `FIG_SCRIPT_FAILED` | hard | non-zero exit (stderr saved to `_gates/Q<n>_fig.stderr.txt`) |
+| `FIG_SCRIPT_TIMEOUT` | hard | exceeded the per-script timeout |
+| `FIG_NOT_REGENERATED` | hard | ran cleanly, never wrote `Q<n>_fig.png` |
+| `FIG_MISMATCH` | hard | different dimensions, or > 15 % of pixels differ; regenerated PNG kept under `_gates/` |
+| `FIG_RENDER_DRIFT` | soft | same dimensions, ≤ 15 % pixels differ (different matplotlib build); regenerated copy discarded |
+| `FIG_SCRIPT_ENV_MISSING` | soft | `ModuleNotFoundError` / `ImportError` on this machine |
+| `FIG_EXEC_SKIPPED` | soft | total time budget exhausted |
+| `NO_GATE_INTERPRETER` | soft | no interpreter imports matplotlib + pandas (set `gate_python`) |
+
+Calibration (2026-09-02): the 22 Demo figures re-rendered under matplotlib 3.9.4
+instead of the validator's 3.10.6 all had identical dimensions and 2–6 % changed
+pixels (text anti-aliasing) — hence the 15 % tolerance. Interpreter resolution:
+`gate_python` pref → `<work_dir>/.venv/bin/python` → `python3`, `/usr/bin/python3`,
+`sys.executable`, first that imports matplotlib and pandas (probe results cached).
+Default on for dispatch, off for `rrg import` (`--exec-gates`).
+
 ### Deliverable root
 
 Prompts say "put all work in {OUTPUT_FOLDER}", so a conforming validator may nest its
@@ -392,6 +417,31 @@ PNG/empty, report sections, fallback report name, script advisories, nested root
 feedback content and blinding), the dispatch loop with a stateful stand-in validator
 (revise-and-pass, exhausted revisions still import, disabled, revisions=0, prefs),
 openrouter skip, import-time record before normalization, eval surfacing, pref coercion.
+
+## 4c. Enforced Isolation (`sandbox.py`, dispatch write detection)
+
+See ADR 0003 for the incident and decision. Mechanics:
+
+- `sandbox.make_sandbox(project, work_dir)` → `{"mode", "prefix", "deny", "reason"}`.
+  Deny list = project root + git toplevel + `dispatch.sandbox_deny`, minus anything
+  containing the work dir. macOS: `sandbox-exec -p "(version 1)(allow default)(deny
+  file-read* file-write* (subpath …))…"`. `dispatch.sandbox: off` disables.
+- `dispatch._SANDBOX_PREFIX` (module state) is applied by `_run()` to every validator
+  subprocess; the same prefix is passed to the exec gate as `exec_prefix`.
+- `_snapshot_tree` / `_detect_escapes`: `{rel: (size, mtime_ns)}` over the git toplevel
+  (skipping `.git`, `.venv`, `node_modules`, `__pycache__`), diffed after the run. New
+  files under the package dir are moved into the collection dir (`quarantined_to`).
+  Records go to `import_run(wrote_inside_project=…)` → `grading.record_breach`, where
+  they are blocking like `copied_secrets`.
+- `packager` calls `utils.make_read_only` on the package dir and chmods the zip 0444;
+  `archive._move` restores write permission for the rename; `utils.remove_tree` handles
+  read-only purges.
+- `_inventory_preamble(work_dir)` is prepended to turn 1 for CLI validators.
+- `_exec_hermes_turn` uses `hermes chat -Q --query-file F --in DIR --no-restore-cwd
+  --run-budget 900 [--resume SID]`; `_parse_hermes_output` strips the toolset warning
+  and reads `session_id:` from stderr.
+
+Tests: `test_isolation.py`.
 
 ## 5. Wizard (`wizard.py`)
 

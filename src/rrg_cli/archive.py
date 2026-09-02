@@ -9,14 +9,17 @@ is never packaged and is skipped by the runs view (``_``-prefixed).
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import shutil
+import stat
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .errors import RRGError
 from .project import Project
+from .utils import remove_tree
 
 
 def archive_root(project: Project) -> Path:
@@ -69,6 +72,31 @@ def _rewrite_index(project: Project, records: list[dict[str, Any]]) -> None:
     )
 
 
+def _move(src: Path, dst: Path) -> None:
+    """Move a file or directory, including a read-only package directory.
+
+    Published packages are read-only (utils.make_read_only). macOS refuses to rename a
+    directory without write permission on it, and shutil.move refuses to touch one at
+    all, so write permission is restored for the rename and stripped again afterwards.
+    """
+    mode: int | None = None
+    if src.is_dir() and not os.access(src, os.W_OK):
+        mode = src.stat().st_mode
+        src.chmod(mode | stat.S_IWUSR)
+    try:
+        try:
+            os.rename(src, dst)
+        except OSError:
+            shutil.move(str(src), str(dst))
+    finally:
+        if mode is not None:
+            target = dst if dst.exists() else src
+            try:
+                target.chmod(mode)
+            except OSError:
+                pass
+
+
 def archive_item(
     project: Project,
     target: str | Path,
@@ -99,7 +127,7 @@ def archive_item(
         "note": note,
         "archived_at": datetime.now(timezone.utc).isoformat(),
     }
-    shutil.move(str(resolved), str(destination))
+    _move(resolved, destination)
     _append_index(project, record)
     return record
 
@@ -130,7 +158,7 @@ def restore_item(project: Project, item_id: str) -> dict[str, Any]:
     if original.exists():
         raise RRGError(f"cannot restore: something already exists at {record['original']}")
     original.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(stored), str(original))
+    _move(stored, original)
     bucket = (root / record["stored"]).parent
     try:
         bucket.rmdir()
@@ -149,6 +177,6 @@ def purge_item(project: Project, item_id: str) -> dict[str, Any]:
     if bucket != archive and archive not in bucket.parents:
         raise RRGError("refusing to purge outside the archive")
     if bucket.exists():
-        shutil.rmtree(bucket)
+        remove_tree(bucket)  # packages are read-only after publish; plain rmtree would fail
     _rewrite_index(project, [item for item in records if item.get("id") != item_id])
     return {"purged": record["original"], "id": item_id}

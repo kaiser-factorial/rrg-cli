@@ -14,7 +14,7 @@ from .importer import RUN_MARKER_NAME, render_run_marker
 from .project import Project
 from .prompts import render_prompt
 from .routing import RoutedInput, resolve_send
-from .utils import mint_run_id, normalize_permissions, safe_label, sha256
+from .utils import make_read_only, mint_run_id, normalize_permissions, safe_label, sha256
 
 
 def _copy_inputs(inputs: list[RoutedInput], destination: Path) -> list[tuple[str, str]]:
@@ -130,6 +130,14 @@ def build_package(
                 # Opaque marker so a returned result set re-binds to this build on import.
                 bundle.writestr(RUN_MARKER_NAME, render_run_marker(run_id))
             package_zip = str(zip_path)
+            # The published package is now a provenance artifact. Make it read-only so a
+            # validator that finds its way back into the project cannot write into it
+            # (a real run did exactly that); the write detector in dispatch is the backstop.
+            make_read_only(destination)
+            try:
+                zip_path.chmod(0o444)
+            except OSError:
+                pass
             output_folder.mkdir(parents=True, exist_ok=True)
             log_path = package_root / "provenance_log.jsonl"
             log_path.parent.mkdir(parents=True, exist_ok=True)

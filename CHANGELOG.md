@@ -11,6 +11,17 @@
   `GATES.json`, `RUN_INFO.md`, and `rrg eval`; exit code 3 when gates still fail.
   `rrg import` gates manual returns once, before normalization.
 - `rrg prefs --set` now validates integer prefs (`gate_revisions`).
+- Executable figure gate: dispatch runs each `Q<n>_fig.py` (sandboxed) and requires it
+  to reproduce `Q<n>_fig.png`; renderer drift under 15 % of pixels is advisory,
+  crashes/timeouts/missing output/real mismatches are hard. Prefs `gate_exec`,
+  `gate_python`; flags `--no-exec-gates`, `--gate-python`; `rrg import --exec-gates`.
+- Enforced validator isolation (ADR 0003): macOS `sandbox-exec` wrapper denying the
+  project tree (`dispatch.sandbox`, `dispatch.sandbox_deny` in rrg.yaml), project-tree
+  write detection with quarantine and a blocking `wrote_inside_project` breach,
+  read-only published packages, and a working-directory inventory on the first turn.
+- Hermes validator switched from `hermes -z --resume` (which starts a new session each
+  turn) to `hermes chat -Q --query-file … --in <work_dir> --resume`, so turns chain.
+- `MPLBACKEND=Agg` is set for validator and gate subprocesses.
 
 ## 0.1.0
 

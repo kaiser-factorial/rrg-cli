@@ -103,6 +103,8 @@ def build_parser() -> argparse.ArgumentParser:
     importer.add_argument("--label")
     importer.add_argument("--run-id", dest="run_id", help="target a specific build's run folder (ADR 0002)")
     importer.add_argument("--skip-normalize", action="store_true", help="skip auto-normalization of returned output")
+    importer.add_argument("--exec-gates", action="store_true",
+                          help="also execute each Q<n>_fig.py to verify it reproduces Q<n>_fig.png (runs validator code locally)")
     importer.add_argument("--json", action="store_true")
 
     ack = sub.add_parser(
@@ -195,6 +197,10 @@ def build_parser() -> argparse.ArgumentParser:
                               help="skip the deterministic deliverable gates after the validator finishes")
     dispatch_cmd.add_argument("--gate-revisions", type=int, default=None, metavar="N",
                               help="revision turns a failing gate may trigger (default: from prefs, 1; 0 = report only)")
+    dispatch_cmd.add_argument("--no-exec-gates", action="store_true",
+                              help="do not execute Q<n>_fig.py scripts to verify they reproduce Q<n>_fig.png")
+    dispatch_cmd.add_argument("--gate-python", default=None, metavar="PYTHON",
+                              help="interpreter for executing figure scripts (default: from prefs, else auto-detect)")
     dispatch_cmd.add_argument("--json", action="store_true")
 
     wizard_cmd = sub.add_parser("wizard", help="interactive setup and dispatch walkthrough")
@@ -292,7 +298,7 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "import":
         result = import_run(
             project, args.stage, args.model, args.source, label=args.label, run_id=args.run_id,
-            normalize=not args.skip_normalize,
+            normalize=not args.skip_normalize, exec_gates=args.exec_gates,
         )
         how = " (auto-resolved from RRG_RUN.txt)" if result.get("auto_resolved") else ""
         breach = result.get("breach") or {}
@@ -486,6 +492,8 @@ def run(args: argparse.Namespace) -> int:
             force=args.force,
             gates=False if args.no_gates else None,
             gate_revisions=args.gate_revisions,
+            gate_exec=False if args.no_exec_gates else None,
+            gate_python=args.gate_python,
         )
         if args.json:
             _emit(result, True)
@@ -685,6 +693,19 @@ def _print_dispatch_result(result):
             print(f"    Turn {i} \u2014 {t['title']}")
     if result.get("conversation"):
         print(f"  Conversation: {len(result['conversation'])} exchange(s)")
+    sandbox = result.get("sandbox")
+    if sandbox is not None:
+        if sandbox.get("mode"):
+            print(f"  Sandbox: {sandbox['mode']} denying {len(sandbox.get('deny') or [])} path(s)")
+        else:
+            print(f"  ⚠ Sandbox: none ({sandbox.get('reason', '')})")
+    escapes = result.get("escapes") or {}
+    if escapes.get("count"):
+        print(f"  ✗ ISOLATION BREACH: validator changed {escapes['count']} file(s) inside the project tree"
+              f" ({len(escapes.get('quarantined') or [])} quarantined into the run)")
+        for record in escapes["records"][:8]:
+            extra = f" → quarantined to {record['quarantined_to']}" if record.get("quarantined_to") else ""
+            print(f"      {record['change']}: {record['path']}{extra}")
     gates = result.get("gates") or {}
     if gates.get("enabled"):
         mark = "✓" if gates.get("passed") else "✗"

@@ -83,6 +83,16 @@ RRG_real_root/
   Result → `GATES.json` in the run folder, `RUN_INFO.md`, `rrg eval`. Prefs `gates`,
   `gate_revisions`; flags `--no-gates`, `--gate-revisions N`; exit 3 on final failure.
   Manual `rrg import` gates once, pre-normalization. See AGENTIC_CLI_DESIGN.md §4b.
+  The executable gate runs every `Q<n>_fig.py` and compares the regenerated PNG
+  (identical / drift ≤15 % advisory / mismatch hard); prefs `gate_exec`, `gate_python`.
+- **Enforced isolation** (`sandbox.py`, ADR 0003, 2026-09-02) — after the Kimi K3 run on
+  cmmi-condensed searched `~` and wrote into `operator/_packages/…/Kimi-K3__4d3cf3d8`:
+  macOS `sandbox-exec` denies the project tree to validators and gate scripts; the
+  checkout is snapshotted before/after and any change is a blocking `wrote_inside_project`
+  breach (package drops are quarantined into the run); published packages are read-only;
+  turn 1 carries the absolute work dir + file inventory. **Hermes now runs via
+  `hermes chat -Q --resume`** — `hermes -z --resume` never chained (verified by probe).
+  Linux/Windows have no OS wrapper yet (detection only).
 - **`rrg import`** — auto-normalizes (fuzzy file matching, stat parsing from text).
   `--skip-normalize` opts out.
 - **`rrg wizard`** — 5-step interactive walkthrough. `--non-interactive`, `--prefs`.

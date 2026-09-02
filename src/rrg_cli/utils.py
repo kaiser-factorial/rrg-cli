@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,33 @@ def normalize_permissions(root: Path) -> None:
             pass
 
 
+def make_read_only(root: Path) -> None:
+    """Strip write permission from a tree (files 0444, directories 0555).
+
+    Published packages are provenance artifacts; nothing should change them after the
+    zip is cut — least of all a validator that found its way back into the project.
+    """
+    for path in [*sorted(root.rglob("*"), reverse=True), root]:
+        try:
+            path.chmod(0o555 if path.is_dir() else 0o444)
+        except OSError:
+            pass
+
+
+def _force_writable_then_retry(func, path, exc_info) -> None:  # pragma: no cover - platform dependent
+    parent = Path(path).parent
+    for target in (parent, Path(path)):
+        try:
+            target.chmod(0o755 if target.is_dir() else 0o644)
+        except OSError:
+            pass
+    func(path)
+
+
 def remove_tree(path: Path) -> None:
+    """rmtree that also removes read-only trees (see :func:`make_read_only`)."""
     if path.exists():
-        shutil.rmtree(path)
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(path, onexc=lambda func, p, exc: _force_writable_then_retry(func, p, exc))
+        else:
+            shutil.rmtree(path, onerror=_force_writable_then_retry)

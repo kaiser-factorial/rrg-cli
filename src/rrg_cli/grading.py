@@ -54,23 +54,28 @@ def record_breach(
     *,
     copied_secrets: list[dict[str, str]],
     ran_inside_project: bool,
+    wrote_inside_project: list[dict[str, str]] | None = None,
 ) -> dict[str, Any] | None:
     """Persist (or clear) a run's breach state after an import.
 
     A *copied secret* — a returned file whose content matches the withheld answer key — is a
-    hard breach that blocks grading until acknowledged. ``ran_inside_project`` is a softer
-    signal (the run may have executed without isolation) that is recorded but does not block.
-    A fully clean import clears any prior record.
+    hard breach that blocks grading until acknowledged. So is *writing inside the project*:
+    a validator that created or changed files in the project tree during dispatch had
+    reached the tree, and therefore could have read anything withheld. ``ran_inside_project``
+    is a softer signal (the run may have executed without isolation) that is recorded but
+    does not block. A fully clean import clears any prior record.
     """
+    wrote_inside_project = wrote_inside_project or []
     path = _breach_path(project, run_value)
-    if not copied_secrets and not ran_inside_project:
+    if not copied_secrets and not ran_inside_project and not wrote_inside_project:
         path.unlink(missing_ok=True)
         return None
     record = {
         "run": run_value,
         "copied_secrets": copied_secrets,
         "ran_inside_project": bool(ran_inside_project),
-        "blocking": bool(copied_secrets),
+        "wrote_inside_project": wrote_inside_project,
+        "blocking": bool(copied_secrets or wrote_inside_project),
         "acknowledged": False,
         "detected_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -95,9 +100,14 @@ def _guard_breach(project: Project, run_value: str) -> None:
     breach = load_breach(project, run_value)
     if breach and breach.get("blocking") and not breach.get("acknowledged"):
         count = len(breach.get("copied_secrets") or [])
+        wrote = len(breach.get("wrote_inside_project") or [])
+        reasons = []
+        if count:
+            reasons.append(f"{count} returned file(s) match the withheld answer key")
+        if wrote:
+            reasons.append(f"the validator wrote {wrote} file(s) inside the project tree")
         raise RRGError(
-            f"blinding breach: {count} returned file(s) match the withheld answer key; "
-            "grading is blocked until the breach is acknowledged"
+            f"blinding breach: {'; '.join(reasons)}; grading is blocked until the breach is acknowledged"
         )
 
 

@@ -63,14 +63,15 @@ Build & dispatch
                                          (--validator V, --mode M, --reuse,
                                           --dry-run, --skip-normalize,
                                           --no-auto-import, --force,
-                                          --no-gates, --gate-revisions N)
+                                          --no-gates, --gate-revisions N,
+                                          --no-exec-gates, --gate-python P)
   rrg lint PACKAGE --stage S             lint an existing outgoing package
   rrg prompt --stage S --model M         render the stage prompt
                                          (--turn N, --mode discuss|nodiscuss)
 
 Import & review
   rrg import SOURCE [--stage S --model M]  import validator output (auto-normalizes)
-                                           (--run-id ID, --skip-normalize)
+                                           (--run-id ID, --skip-normalize, --exec-gates)
   rrg runs                               list the run registry
   rrg scorecard --run R --stage S --model M  create a human-grading skeleton
   rrg eval --run R                       evaluate a run (contract + breach + grading)
@@ -139,7 +140,8 @@ rrg prefs              # view current
 rrg prefs --reset      # back to defaults
 ```
 
-Keys: `validator`, `mode`, `skip_normalize`, `auto_import`, `gates`, `gate_revisions`.
+Keys: `validator`, `mode`, `skip_normalize`, `auto_import`, `gates`, `gate_revisions`,
+`gate_exec`, `gate_python`.
 
 ### Deliverable gates
 
@@ -163,6 +165,21 @@ ones — a nested object in the summary JSON, a `"<1e-300"` p-value string, a nu
 p-value — are asked for but never fail the run, and if a revision leaves them
 unchanged the loop stops rather than repeating the same request.
 
+**Executable figure gate.** Naming the files is not the same as producing them. For every
+question whose static figure checks pass, dispatch also *runs* `Q<n>_fig.py` in the
+output root (under the same OS sandbox as the validator), with the delivered PNG moved
+aside, and compares what comes back: byte-identical or pixel-identical → clean;
+same dimensions with under 15 % of pixels changed → advisory `FIG_RENDER_DRIFT`
+(a different matplotlib build, same figure — calibrated on 22 real figures);
+anything else → hard `FIG_MISMATCH`, with the regenerated file kept under `_gates/`
+as evidence. A script that crashes, times out, or never writes the PNG fails hard;
+one that only lacks a module on this machine is advisory. The interpreter is the
+`gate_python` pref, else a `.venv` the validator built, else the first of `python3`,
+`/usr/bin/python3`, and RRG's own that imports matplotlib and pandas. Executing
+validator code is default-on for `rrg dispatch` and default-off for manual
+`rrg import` (`--exec-gates` to opt in), because a manual return may be code that has
+never run on this machine.
+
 The outcome, including every attempt's observation, is written to `GATES.json` in
 the run folder and summarized in `RUN_INFO.md` and `rrg eval`, so a run that needed
 a revision is distinguishable from one that conformed first time. `rrg dispatch`
@@ -173,8 +190,32 @@ the record shows what was actually delivered.
 ```bash
 rrg dispatch --stage replication --model default --validator hermes --gate-revisions 2
 rrg dispatch ... --no-gates            # skip entirely
+rrg dispatch ... --no-exec-gates       # static checks only
 rrg prefs --set gate_revisions=0       # report only, never send a revision turn
+rrg prefs --set gate_python=/opt/anaconda3/bin/python
 ```
+
+### Enforced isolation
+
+ADR 0001 put the validator in a temp dir and trusted it to stay there. A real run did
+not (see ADR 0003): the agent searched the home directory, found the project, and
+worked inside the published package. Isolation is now enforced three ways:
+
+- **OS sandbox.** On macOS every validator command runs under `sandbox-exec` with
+  file reads and writes denied under the project root, the enclosing git checkout,
+  and any `dispatch.sandbox_deny` paths in `rrg.yaml`. The agent's shell inherits
+  the denial. `dispatch.sandbox: off` disables it; other platforms have no wrapper yet.
+- **Write detection.** The checkout is snapshotted before and after the run. Any
+  file the validator created, changed, or removed inside it is an isolation breach:
+  recorded on the run, printed as `ISOLATION BREACH`, and blocking grading until
+  acknowledged. Files dropped into the published package are quarantined into the
+  run so nothing is lost and the package is pristine again.
+- **Read-only packages.** Published package dirs and zips are chmod'd read-only.
+
+Dispatch also prepends the absolute working directory and a file inventory to the
+first turn, so the validator has no reason to look elsewhere, and the Hermes
+validator now uses `hermes chat -Q --resume` so turns share one session
+(`hermes -z --resume` silently starts a new one).
 
 ### Output normalizer
 

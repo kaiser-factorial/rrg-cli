@@ -96,10 +96,12 @@ def _read_breach(project: Project, run_value: str) -> dict[str, Any]:
     from .grading import load_breach
     record = load_breach(project, run_value)
     if record is None:
-        return {"flagged": False, "copied_secrets": [], "ran_inside_project": False, "acknowledged": False}
+        return {"flagged": False, "copied_secrets": [], "wrote_inside_project": [],
+                "ran_inside_project": False, "acknowledged": False}
     return {
-        "flagged": bool(record.get("copied_secrets")),
+        "flagged": bool(record.get("copied_secrets") or record.get("wrote_inside_project")),
         "copied_secrets": record.get("copied_secrets", []),
+        "wrote_inside_project": record.get("wrote_inside_project", []),
         "ran_inside_project": record.get("ran_inside_project", False),
         "acknowledged": record.get("acknowledged", False),
     }
@@ -163,7 +165,10 @@ def _build_report(
         "",
     ])
     if breach["flagged"]:
-        lines.append(f"  BREACH — {len(breach['copied_secrets'])} file(s) match the answer key.")
+        if breach["copied_secrets"]:
+            lines.append(f"  BREACH — {len(breach['copied_secrets'])} file(s) match the answer key.")
+        if breach.get("wrote_inside_project"):
+            lines.append(f"  BREACH — validator wrote {len(breach['wrote_inside_project'])} file(s) inside the project tree.")
         if breach["acknowledged"]:
             lines.append("  (acknowledged — grading unblocked)")
         else:

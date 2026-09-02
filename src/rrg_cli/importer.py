@@ -268,8 +268,12 @@ def _write_run_info(
         "",
         "## Pipeline status",
         "",
-        f"- **Breach check**: {'BREACH DETECTED' if breach.get('copied_secrets') else 'CLEAN'}",
+        f"- **Breach check**: {'BREACH DETECTED' if (breach.get('copied_secrets') or breach.get('wrote_inside_project')) else 'CLEAN'}",
         f"- **Ran inside project**: {'yes (warning)' if breach.get('ran_inside_project') else 'no'}",
+        f"- **Wrote inside project**: {len(breach.get('wrote_inside_project') or [])} file(s)"
+        + (" (BREACH — see the breach record)" if breach.get("wrote_inside_project") else ""),
+        f"- **Sandbox**: {(gates or {}).get('sandbox', {}).get('mode') or 'none'}"
+        if gates and gates.get("sandbox") else "- **Sandbox**: n/a (not a dispatch)",
         gate_line,
         f"- **Normalization**: {len(norm.get('files_moved', []))} file(s) renamed, "
         f"{len(norm.get('summary_json_created', []))} summary.json created"
@@ -298,6 +302,9 @@ def import_run(
     validator: str | None = None,
     model_provenance: str | None = None,
     gates: dict[str, Any] | None = None,
+    exec_gates: bool = False,
+    wrote_inside_project: list[dict[str, str]] | None = None,
+    sandbox: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Copy a returned folder/zip into its run folder, then check, normalize, and record.
 
@@ -306,6 +313,12 @@ def import_run(
     files exactly as returned — before normalization touches them — so the record always
     reflects what the validator actually delivered. Either way the record is written to
     ``GATES.json`` in the run folder and summarized in ``RUN_INFO.md``.
+
+    ``exec_gates`` also executes each figure script at import time. It defaults to off
+    here: a manual return may come from a remote validator whose code has never run on
+    this machine. ``wrote_inside_project`` lists files the validator created or changed in
+    the project tree during dispatch — a blocking breach, since reaching the tree means it
+    could read what was withheld.
     """
     if source is None:
         raise RRGError("a returned folder or .zip is required")
@@ -364,23 +377,30 @@ def import_run(
 
     run_value = str(destination.relative_to(project.root))
     breach = detect_breach(project, stage_id, destination, source)
+    breach["wrote_inside_project"] = list(wrote_inside_project or [])
     grading_module.record_breach(
         project,
         run_value,
         copied_secrets=breach["copied_secrets"],
         ran_inside_project=breach["ran_inside_project"],
+        wrote_inside_project=breach["wrote_inside_project"],
     )
 
     # Deliverable gates on the files as returned (before normalization renames anything).
     if gates is None:
         from .gates import check_gates, gate_record, project_question_count, project_report_name
+        from .prefs import load_prefs
+        gate_python = str(load_prefs(project).get("gate_python", "") or "") or None
         gates = gate_record(
             check_gates(
                 destination, project_question_count(project),
                 project_report_name(project, stage_id, roster_entry.get("model") if roster_entry else model_query),
+                exec_figures=exec_gates, exec_python=gate_python,
             ),
             source="import",
         )
+    if sandbox is not None:
+        gates = {**gates, "sandbox": {"mode": sandbox.get("mode"), "reason": sandbox.get("reason", "")}}
     (destination / "GATES.json").write_text(
         json.dumps(gates, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
     )
