@@ -3,19 +3,22 @@
 ## Repository state
 
 - Repository: `kaiser-factorial/rrg-cli`
-- Working branch: `feat/rrg-workspace-cli`
+- Integration branch: `feat/rrg-workspace-cli`; merged to `main` through PR #3
 - Continuation worktree: `/Users/corinakaiser/Projects/Effort/rrg-cli-worktree`
 - Base feature branch: `feat/rrg-validation-hardening`
-- Remote status checked 2026-09-02: `origin/main` remains at `4511054`; open PR #1
-  (`feat/deliverable-gates`) and PR #2 (`claude/focused-curran-8e09f2`) are both
-  ancestors of this branch. PR #2's deterministic extraction-order fix is present.
+- Merge status checked 2026-09-02: PR #3 merged as `e04d309`. GitHub then marked PR #1
+  (`feat/deliverable-gates`) and PR #2 (`claude/focused-curran-8e09f2`) merged because
+  both heads are ancestors of PR #3. PR #2's extraction-order fix is present.
 - Local hardening commits:
   - `59b6493` — Unify scorecard and review metric comparison
   - `0183a16` — Add blinded canonical metric contracts
   - `a3d31fa` — Gate robustness inputs and derived model evaluations
   - `218bb01` — Enforce semantic deliverable gates
   - `2e3eeb6` — Simplify run layout and transactional imports
-- Nothing from this trajectory has been pushed. The original checkout's unrelated
+- Follow-up publication repairs: `9217c0c` cleaned the normalizer source and `8634d36`
+  fixed Python 3.9–3.11 f-string compatibility plus an environment-dependent gate test.
+- The trajectory is published on `main`; retained feature branches were not deleted.
+  The original checkout's unrelated
   untracked `skills/rrg-effort-expander/` was not modified or staged.
 
 ## Requirement-by-requirement status
@@ -78,6 +81,8 @@
   1 skipped` from 253 collected tests.
 - Python 3.9 and 3.11 compile checks cover the CLI/TUI syntax that Python 3.13 accepts
   more permissively; the 46 affected CLI/TUI/gate tests pass locally.
+- GitHub CI is green for Python 3.9, 3.10, 3.11, and 3.12, with the wheel/source
+  distribution build and installed-CLI smoke check also passing.
 - Re-run the full suite and the
   nine loopback tests after any code change touching dispatch, import, GUI service,
   grading, intake, or origin APIs.
@@ -95,7 +100,8 @@ not an application assertion failure; rerun the named HTTP tests in an allowed s
 
 ## Outstanding work
 
-1. Push/open/update PRs only with explicit authorization. Current work is local.
+1. Retained feature branches/worktrees can be removed later, but only after confirming
+   no follow-up depends on them.
 2. Existing projects are deliberately not auto-migrated. Add the new path keys when an
    operator is ready, then verify `rrg paths`; do not move historical evidence silently.
 3. Populate and approve real `METRIC_SPEC.json`, canonical origin JSON, robustness

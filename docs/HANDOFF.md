@@ -14,11 +14,12 @@ Generalization**. It packages only stage-permitted inputs, dispatches supported
 validator harnesses, gates the returned deliverables, imports them into operator-only
 run storage, and exposes deterministic comparisons for human review.
 
-The validation-hardening trajectory is implemented locally on
-`feat/rrg-workspace-cli`. It contains both open Claude PR heads plus the local commits
+The validation-hardening trajectory is merged into `main` through PR #3
+(`e04d309`). It contains both Claude PRs (#1 and #2) plus the commits
 for shared comparison, blinded metric contracts, robustness/model prerequisites,
 semantic gates, explicit writable roots, transactional imports, the new operator
-layout, and CLI usability. It has not been pushed.
+layout, and CLI usability. GitHub CI passed on Python 3.9–3.12 plus the distribution
+build. The feature branches and worktrees were retained.
 
 ## Trust boundaries
 
@@ -56,5 +57,5 @@ Run a real end-to-end Hermes/Kimi canary from a prepared project and confirm:
 4. a deliberate metric mismatch fails loudly without leaking the origin value; and
 5. scorecard and Review UI show identical status/delta/tolerance output.
 
-Do not push, merge the GitHub PRs, or migrate historical projects without explicit
-operator authorization.
+Do not delete retained feature branches/worktrees or migrate historical projects
+without explicit operator authorization.
